@@ -1,16 +1,25 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import express from "express";
+import express, {
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 
 import type { CompletedOrder, Listing, ListingsResponse } from "../showApi";
 
 interface CollectorConfig {
+  allowedOrigins: string[];
   apiBaseUrl: string;
   concurrency: number;
   dbPath: string;
+  host: string;
   intervalMs: number;
   port: number;
   requestDelayMs: number;
+  staticDir: string;
 }
 
 interface CollectionOptions {
@@ -36,6 +45,10 @@ interface NormalizedOrder {
 }
 
 type SqlParams = Record<string, string | number | null>;
+
+if (fs.existsSync(".env")) {
+  process.loadEnvFile(".env");
+}
 
 const config = readConfig();
 const db = new DatabaseSync(config.dbPath);
@@ -201,7 +214,12 @@ async function main() {
 function startHttpServer() {
   const app = express();
 
+  app.use(cors);
   app.use(express.json());
+
+  app.options(/.*/, (_req, res) => {
+    res.sendStatus(204);
+  });
 
   app.get("/api/health", (_req, res) => {
     res.json({
@@ -210,6 +228,14 @@ function startHttpServer() {
       counts: getCounts(),
       lastRun: getLastRun(),
     });
+  });
+
+  app.get("/api/show/listings.json", async (req, res) => {
+    await sendShowApiJson(req, res, "/listings.json");
+  });
+
+  app.get("/api/show/listing.json", async (req, res) => {
+    await sendShowApiJson(req, res, "/listing.json");
   });
 
   app.get("/api/cards/:uuid/orders", (req, res) => {
@@ -246,10 +272,87 @@ function startHttpServer() {
     }
   });
 
-  app.listen(config.port, () => {
-    console.log(`Market history service listening on http://127.0.0.1:${config.port}`);
+  serveFrontend(app);
+
+  app.listen(config.port, config.host, () => {
+    console.log(`Market history service listening on http://${config.host}:${config.port}`);
     console.log(`Polling every ${Math.round(config.intervalMs / 60000)} minute(s)`);
   });
+}
+
+function serveFrontend(app: express.Express) {
+  const indexPath = path.join(config.staticDir, "index.html");
+
+  if (!fs.existsSync(indexPath)) {
+    console.log(
+      `No frontend build found at ${indexPath}; API-only mode is active.`,
+    );
+    return;
+  }
+
+  app.use(express.static(config.staticDir, { index: false }));
+  app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+    res.sendFile(indexPath);
+  });
+
+  console.log(`Serving frontend from ${config.staticDir}`);
+}
+
+function cors(req: Request, res: Response, next: NextFunction) {
+  const origin = req.get("origin");
+
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  } else if (config.allowedOrigins.includes("*")) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    req.get("access-control-request-headers") ?? "Content-Type,Accept",
+  );
+
+  next();
+}
+
+async function sendShowApiJson(
+  req: Request,
+  res: Response,
+  path: "/listing.json" | "/listings.json",
+) {
+  try {
+    const json = await requestJson<unknown>(path, toShowSearchParams(req.query));
+    res.json(json);
+  } catch (error) {
+    res.status(502).json({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function toShowSearchParams(
+  query: Request["query"],
+): Record<string, string | number | undefined> {
+  const params: Record<string, string | number | undefined> = {};
+
+  for (const [key, rawValue] of Object.entries(query)) {
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    if (typeof value === "string" && value.length > 0) {
+      params[key] = value;
+    }
+  }
+
+  return params;
+}
+
+function isAllowedOrigin(origin: string): boolean {
+  return (
+    config.allowedOrigins.includes("*") ||
+    config.allowedOrigins.includes(origin)
+  );
 }
 
 async function collectOnce(options: CollectionOptions): Promise<CollectionStats> {
@@ -552,13 +655,16 @@ function countTable(tableName: string): number {
 
 function readConfig(): CollectorConfig {
   return {
+    allowedOrigins: readList("CORS_ORIGINS", ["*"]),
     apiBaseUrl:
       process.env.SHOW_API_BASE_URL ?? "https://mlb26.theshow.com/apis",
     concurrency: readInt("COLLECTOR_CONCURRENCY", 4),
     dbPath: process.env.MARKET_DB_PATH ?? "market.sqlite",
+    host: process.env.MARKET_SERVER_HOST ?? "127.0.0.1",
     intervalMs: readInt("COLLECTOR_INTERVAL_MS", 60 * 60 * 1000),
     port: readInt("MARKET_SERVER_PORT", 4000),
     requestDelayMs: readInt("REQUEST_DELAY_MS", 150),
+    staticDir: process.env.STATIC_DIR ?? path.resolve(process.cwd(), "dist"),
   };
 }
 
@@ -602,6 +708,15 @@ function readInt(name: string, fallback: number): number {
   if (value === undefined || value === "") return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
+}
+
+function readList(name: string, fallback: string[]): string[] {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") return fallback;
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function normalizeOrderTime(value: string | null): string | null {

@@ -11,6 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "collect:once": "tsx src/server/marketServer.ts --once",
     "market-server": "tsx src/server/marketServer.ts",
+    "serve": "npm run build && npm run start",
+    "start": "tsx src/server/marketServer.ts",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

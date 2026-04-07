@@ -58,7 +58,20 @@ export interface ListingsResponse {
   listings: Listing[];
 }
 
-const API_BASE = import.meta.env.VITE_SHOW_API_BASE ?? "/show-api";
+const BACKEND_API_BASE = import.meta.env.VITE_BACKEND_API_BASE as
+  | string
+  | undefined;
+const API_BASE =
+  import.meta.env.VITE_SHOW_API_BASE ??
+  (BACKEND_API_BASE
+    ? `${trimTrailingSlash(BACKEND_API_BASE)}/api/show`
+    : "/api/show");
+const HISTORY_API_BASE =
+  import.meta.env.VITE_HISTORY_API_BASE ??
+  (BACKEND_API_BASE
+    ? `${trimTrailingSlash(BACKEND_API_BASE)}/api`
+    : "/api");
+const HISTORY_API_ENABLED = import.meta.env.VITE_HISTORY_API_ENABLED !== "false";
 
 export async function fetchListings({
   page = 1,
@@ -94,8 +107,14 @@ export async function fetchStoredCompletedOrders({
   days?: number;
   uuid: string;
 }): Promise<CompletedOrder[]> {
+  if (!HISTORY_API_ENABLED) {
+    return [];
+  }
+
   const url = new URL(
-    `/history-api/cards/${encodeURIComponent(uuid)}/orders`,
+    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
+      uuid,
+    )}/orders`,
     window.location.href,
   );
   url.searchParams.set("days", String(days));
