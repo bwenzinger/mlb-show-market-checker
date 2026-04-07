@@ -171,7 +171,8 @@ export default function App() {
   const selectedName =
     selectedListing?.listing_name ??
     selectedListing?.item?.name ??
-    listings.find((listing) => listing.item?.uuid === selectedUuid)?.listing_name ??
+    listings.find((listing) => listing.item?.uuid === selectedUuid)
+      ?.listing_name ??
     "Select a player";
   const bestBuy = toNumber(selectedListing?.best_buy_price);
   const bestSell = toNumber(selectedListing?.best_sell_price);
@@ -180,8 +181,12 @@ export default function App() {
   const latestOrder =
     completedOrders[completedOrders.length - 1]?.label ?? "Not returned";
   const currentSpread =
-    bestBuy !== null && bestSell !== null ? Math.max(bestSell - bestBuy, 0) : null;
-  const averageOrderPrice = average(completedOrders.map((order) => order.price));
+    bestBuy !== null && bestSell !== null
+      ? Math.max(bestSell - bestBuy, 0)
+      : null;
+  const averageOrderPrice = average(
+    completedOrders.map((order) => order.price),
+  );
   const cardImage =
     selectedListing?.item?.baked_img_lg ??
     selectedListing?.item?.baked_img ??
@@ -327,7 +332,10 @@ export default function App() {
                 gap: 1.75,
               }}
             >
-              <ChartCard title="Daily price history" meta={`${priceHistory.length} points`}>
+              <ChartCard
+                title="Daily price history"
+                meta={`${priceHistory.length} points`}
+              >
                 <PriceChart points={priceHistory} />
               </ChartCard>
 
@@ -345,7 +353,11 @@ export default function App() {
                 meta={`${earliestOrder} to ${latestOrder}`}
               />
               <TableContainer sx={{ maxHeight: 360 }}>
-                <Table stickyHeader size="small" aria-label="Recent completed orders">
+                <Table
+                  stickyHeader
+                  size="small"
+                  aria-label="Recent completed orders"
+                >
                   <TableHead>
                     <TableRow>
                       <TableCell>Time</TableCell>
@@ -358,7 +370,9 @@ export default function App() {
                       .reverse()
                       .slice(0, 40)
                       .map((order, index) => (
-                        <TableRow key={`${order.label}-${order.price}-${index}`}>
+                        <TableRow
+                          key={`${order.label}-${order.price}-${index}`}
+                        >
                           <TableCell>{order.label}</TableCell>
                           <TableCell align="right">
                             {formatStubs(order.price)}
@@ -423,7 +437,9 @@ function SearchPanel({
             <Select
               label="Rarity"
               labelId="rarity-label"
-              onChange={(event: SelectChangeEvent) => setRarity(event.target.value)}
+              onChange={(event: SelectChangeEvent) =>
+                setRarity(event.target.value)
+              }
               value={rarity}
             >
               {rarityOptions.map((option) => (
@@ -456,17 +472,6 @@ function SearchPanel({
         ) : null}
 
         <Box sx={{ position: "relative" }}>
-          {listingState === "loading" ? (
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ alignItems: "center", color: "text.secondary", mb: 1 }}
-            >
-              <CircularProgress size={16} />
-              <Typography variant="body2">Loading market cards...</Typography>
-            </Stack>
-          ) : null}
-
           <List
             aria-label="Player listings"
             disablePadding
@@ -481,7 +486,8 @@ function SearchPanel({
             {listings.map((listing, index) => {
               const uuid = listing.item?.uuid;
               const active = uuid === selectedUuid;
-              const image = listing.item?.baked_img ?? listing.item?.img ?? undefined;
+              const image =
+                listing.item?.baked_img ?? listing.item?.img ?? undefined;
 
               return (
                 <ListItemButton
@@ -500,7 +506,10 @@ function SearchPanel({
                     <Avatar
                       src={image}
                       variant="square"
-                      sx={{ bgcolor: "background.default", objectFit: "contain" }}
+                      sx={{
+                        bgcolor: "background.default",
+                        objectFit: "contain",
+                      }}
                     >
                       {listing.listing_name?.charAt(0) ?? "?"}
                     </Avatar>
@@ -532,7 +541,11 @@ function Metric({ label, value }: { label: string; value: string }) {
       <Typography color="text.secondary" variant="caption">
         {label}
       </Typography>
-      <Typography fontWeight={900} sx={{ overflowWrap: "anywhere" }} variant="h6">
+      <Typography
+        fontWeight={900}
+        sx={{ overflowWrap: "anywhere" }}
+        variant="h6"
+      >
         {value}
       </Typography>
     </Paper>
@@ -575,7 +588,9 @@ function SectionHeading({ meta, title }: { meta: string; title: string }) {
 
 function PriceChart({ points }: { points: PricePoint[] }) {
   if (points.length === 0) {
-    return <Typography color="text.secondary">No daily prices returned.</Typography>;
+    return (
+      <Typography color="text.secondary">No daily prices returned.</Typography>
+    );
   }
 
   return (
@@ -594,7 +609,9 @@ function PriceChart({ points }: { points: PricePoint[] }) {
 function OrderChart({ buckets }: { buckets: OrderBucket[] }) {
   if (buckets.length === 0) {
     return (
-      <Typography color="text.secondary">No completed orders returned.</Typography>
+      <Typography color="text.secondary">
+        No completed orders returned.
+      </Typography>
     );
   }
 
@@ -616,7 +633,11 @@ function LineChart({
   primaryLabel,
   secondaryLabel,
 }: {
-  points: Array<{ label: string; primary: number | null; secondary: number | null }>;
+  points: Array<{
+    label: string;
+    primary: number | null;
+    secondary: number | null;
+  }>;
   primaryLabel: string;
   secondaryLabel: string;
 }) {
@@ -667,7 +688,12 @@ function LineChart({
         role="img"
         aria-label={`${primaryLabel} and ${secondaryLabel} trend`}
         viewBox={`0 0 ${width} ${height}`}
-        sx={{ display: "block", height: "auto", overflow: "visible", width: "100%" }}
+        sx={{
+          display: "block",
+          height: "auto",
+          overflow: "visible",
+          width: "100%",
+        }}
       >
         <line
           x1={padding}
@@ -701,15 +727,13 @@ function LineChart({
         />
         {points.map((point, index) => {
           const currentX = xFor(index);
-          const leftX =
-            index === 0 ? 0 : (xFor(index - 1) + currentX) / 2;
+          const leftX = index === 0 ? 0 : (xFor(index - 1) + currentX) / 2;
           const rightX =
             index === points.length - 1
               ? width
               : (currentX + xFor(index + 1)) / 2;
           const columnWidth = Math.max(rightX - leftX, 1);
-          const primaryY =
-            point.primary === null ? null : yFor(point.primary);
+          const primaryY = point.primary === null ? null : yFor(point.primary);
           const secondaryY =
             point.secondary === null ? null : yFor(point.secondary);
           if (primaryY === null && secondaryY === null) return null;
@@ -817,7 +841,9 @@ function LegendItem({ color, label }: { color: string; label: string }) {
   );
 }
 
-function normalizePriceHistory(points: ListingPriceHistoryPoint[]): PricePoint[] {
+function normalizePriceHistory(
+  points: ListingPriceHistoryPoint[],
+): PricePoint[] {
   return points
     .map((point) => {
       const date = parseMonthDay(point.date);
@@ -886,7 +912,10 @@ function parseMonthDay(value: string | null | undefined): Date | null {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  if (!match[3] && candidate.getTime() - today.getTime() > 24 * 60 * 60 * 1000) {
+  if (
+    !match[3] &&
+    candidate.getTime() - today.getTime() > 24 * 60 * 60 * 1000
+  ) {
     year -= 1;
   }
 
@@ -916,7 +945,9 @@ function toNumber(value: unknown): number | null {
     return null;
   }
 
-  const parsed = Number(value);
+  const normalized =
+    typeof value === "string" ? value.replace(/,/g, "") : value;
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
