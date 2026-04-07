@@ -1,0 +1,665 @@
+import crypto from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
+import express from "express";
+
+import type { CompletedOrder, Listing, ListingsResponse } from "../showApi";
+
+interface CollectorConfig {
+  apiBaseUrl: string;
+  concurrency: number;
+  dbPath: string;
+  intervalMs: number;
+  port: number;
+  requestDelayMs: number;
+}
+
+interface CollectionOptions {
+  limit: number | null;
+}
+
+interface CollectionStats {
+  cardsSeen: number;
+  listingRequests: number;
+  ordersSeen: number;
+  ordersInserted: number;
+  startedAt: string;
+  finishedAt: string;
+}
+
+interface NormalizedOrder {
+  orderTime: string;
+  orderTimeText: string;
+  price: number;
+  duplicateOrdinal: number;
+  sourceHash: string;
+  rawJson: string;
+}
+
+type SqlParams = Record<string, string | number | null>;
+
+const config = readConfig();
+const db = new DatabaseSync(config.dbPath);
+
+db.exec("PRAGMA journal_mode = WAL");
+db.exec("PRAGMA foreign_keys = ON");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS market_cards (
+    uuid TEXT PRIMARY KEY,
+    listing_name TEXT,
+    name TEXT,
+    team TEXT,
+    team_short_name TEXT,
+    rarity TEXT,
+    ovr INTEGER,
+    series TEXT,
+    display_position TEXT,
+    best_sell_price INTEGER,
+    best_buy_price INTEGER,
+    raw_json TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS stored_completed_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT NOT NULL,
+    order_time TEXT NOT NULL,
+    order_time_text TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    duplicate_ordinal INTEGER NOT NULL,
+    source_hash TEXT NOT NULL UNIQUE,
+    captured_at TEXT NOT NULL,
+    raw_json TEXT NOT NULL,
+    FOREIGN KEY (uuid) REFERENCES market_cards(uuid)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_stored_completed_orders_uuid_time
+    ON stored_completed_orders(uuid, order_time);
+
+  CREATE TABLE IF NOT EXISTS collector_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL,
+    cards_seen INTEGER DEFAULT 0,
+    listing_requests INTEGER DEFAULT 0,
+    orders_seen INTEGER DEFAULT 0,
+    orders_inserted INTEGER DEFAULT 0,
+    error TEXT
+  );
+`);
+
+const upsertCardStmt = db.prepare(`
+  INSERT INTO market_cards (
+    uuid,
+    listing_name,
+    name,
+    team,
+    team_short_name,
+    rarity,
+    ovr,
+    series,
+    display_position,
+    best_sell_price,
+    best_buy_price,
+    raw_json,
+    updated_at
+  ) VALUES (
+    @uuid,
+    @listing_name,
+    @name,
+    @team,
+    @team_short_name,
+    @rarity,
+    @ovr,
+    @series,
+    @display_position,
+    @best_sell_price,
+    @best_buy_price,
+    @raw_json,
+    @updated_at
+  )
+  ON CONFLICT(uuid) DO UPDATE SET
+    listing_name = excluded.listing_name,
+    name = excluded.name,
+    team = excluded.team,
+    team_short_name = excluded.team_short_name,
+    rarity = excluded.rarity,
+    ovr = excluded.ovr,
+    series = excluded.series,
+    display_position = excluded.display_position,
+    best_sell_price = excluded.best_sell_price,
+    best_buy_price = excluded.best_buy_price,
+    raw_json = excluded.raw_json,
+    updated_at = excluded.updated_at
+`);
+
+const insertOrderStmt = db.prepare(`
+  INSERT OR IGNORE INTO stored_completed_orders (
+    uuid,
+    order_time,
+    order_time_text,
+    price,
+    duplicate_ordinal,
+    source_hash,
+    captured_at,
+    raw_json
+  ) VALUES (
+    @uuid,
+    @order_time,
+    @order_time_text,
+    @price,
+    @duplicate_ordinal,
+    @source_hash,
+    @captured_at,
+    @raw_json
+  )
+`);
+
+const insertRunStmt = db.prepare(`
+  INSERT INTO collector_runs (started_at, status)
+  VALUES (?, 'running')
+`);
+
+const finishRunStmt = db.prepare(`
+  UPDATE collector_runs
+  SET
+    finished_at = @finished_at,
+    status = @status,
+    cards_seen = @cards_seen,
+    listing_requests = @listing_requests,
+    orders_seen = @orders_seen,
+    orders_inserted = @orders_inserted,
+    error = @error
+  WHERE id = @id
+`);
+
+let collectionInFlight: Promise<CollectionStats> | null = null;
+
+async function main() {
+  const cliOptions = parseCliOptions();
+
+  if (cliOptions.once) {
+    const stats = await collectOnce({ limit: cliOptions.limit });
+    console.log("Collection complete:", stats);
+    return;
+  }
+
+  startHttpServer();
+  void collectOnce({ limit: cliOptions.limit }).catch((error) => {
+    console.error("Initial collection failed:", error);
+  });
+
+  windowlessSetInterval(() => {
+    void collectOnce({ limit: cliOptions.limit }).catch((error) => {
+      console.error("Scheduled collection failed:", error);
+    });
+  }, config.intervalMs);
+}
+
+function startHttpServer() {
+  const app = express();
+
+  app.use(express.json());
+
+  app.get("/api/health", (_req, res) => {
+    res.json({
+      ok: true,
+      collectionInProgress: collectionInFlight !== null,
+      counts: getCounts(),
+      lastRun: getLastRun(),
+    });
+  });
+
+  app.get("/api/cards/:uuid/orders", (req, res) => {
+    const days = clampInt(req.query.days, 7, 1, 3650);
+    const cutoff = toSqlDateTime(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+    const rows = db
+      .prepare(
+        `
+          SELECT
+            order_time_text AS date,
+            price,
+            duplicate_ordinal
+          FROM stored_completed_orders
+          WHERE uuid = ?
+            AND order_time >= ?
+          ORDER BY order_time ASC, id ASC
+        `,
+      )
+      .all(req.params.uuid, cutoff);
+
+    res.json({ source: "local-db", days, orders: rows });
+  });
+
+  app.post("/api/collect", async (req, res) => {
+    try {
+      const limit = clampOptionalInt(req.query.limit ?? req.body?.limit);
+      const stats = await collectOnce({ limit });
+      res.json({ ok: true, stats });
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.listen(config.port, () => {
+    console.log(`Market history service listening on http://127.0.0.1:${config.port}`);
+    console.log(`Polling every ${Math.round(config.intervalMs / 60000)} minute(s)`);
+  });
+}
+
+async function collectOnce(options: CollectionOptions): Promise<CollectionStats> {
+  if (collectionInFlight) {
+    return collectionInFlight;
+  }
+
+  collectionInFlight = runCollection(options).finally(() => {
+    collectionInFlight = null;
+  });
+
+  return collectionInFlight;
+}
+
+async function runCollection({ limit }: CollectionOptions): Promise<CollectionStats> {
+  const startedAt = new Date().toISOString();
+  const run = insertRunStmt.run(startedAt);
+  const runId = Number(run.lastInsertRowid);
+  const stats: CollectionStats = {
+    cardsSeen: 0,
+    listingRequests: 0,
+    ordersSeen: 0,
+    ordersInserted: 0,
+    startedAt,
+    finishedAt: "",
+  };
+
+  try {
+    console.log("Collecting market listings...");
+    const listings = await fetchAllMarketListings(limit);
+    const selectedListings = limit === null ? listings : listings.slice(0, limit);
+    stats.cardsSeen = selectedListings.length;
+
+    withTransaction(() => {
+      for (const listing of selectedListings) {
+        upsertMarketCard(listing, startedAt);
+      }
+    });
+
+    console.log(`Fetching completed orders for ${selectedListings.length} card(s)...`);
+
+    await mapConcurrent(selectedListings, config.concurrency, async (listing) => {
+      const uuid = listing.item?.uuid;
+      if (!uuid) return;
+
+      try {
+        const detail = await fetchListingByUuid(uuid);
+        stats.listingRequests += 1;
+
+        upsertMarketCard(detail, new Date().toISOString());
+        const normalizedOrders = normalizeCompletedOrders(
+          uuid,
+          detail.completed_orders ?? [],
+        );
+        stats.ordersSeen += normalizedOrders.length;
+
+        withTransaction(() => {
+          for (const order of normalizedOrders) {
+            stats.ordersInserted += insertStoredOrder(uuid, order, startedAt);
+          }
+        });
+      } catch (error) {
+        console.error(
+          `Failed to collect listing ${uuid}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    });
+
+    stats.finishedAt = new Date().toISOString();
+    finishRun(runId, "success", stats, null);
+    console.log(
+      `Collection finished: ${stats.ordersInserted} new order(s), ${stats.ordersSeen} seen`,
+    );
+    return stats;
+  } catch (error) {
+    stats.finishedAt = new Date().toISOString();
+    const message = error instanceof Error ? error.message : String(error);
+    finishRun(runId, "error", stats, message);
+    throw error;
+  }
+}
+
+async function fetchAllMarketListings(limit: number | null): Promise<Listing[]> {
+  const listings: Listing[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await requestJson<ListingsResponse>("/listings.json", {
+      type: "mlb_card",
+      page,
+      sort: "rank",
+      order: "desc",
+    });
+
+    listings.push(...(response.listings ?? []));
+    totalPages = Number(response.total_pages ?? page);
+    console.log(`Listings page ${page}/${totalPages}`);
+    if (limit !== null && listings.length >= limit) {
+      break;
+    }
+    page += 1;
+  } while (page <= totalPages);
+
+  return listings;
+}
+
+async function fetchListingByUuid(uuid: string): Promise<Listing> {
+  return requestJson<Listing>("/listing.json", { uuid });
+}
+
+function upsertMarketCard(listing: Listing, updatedAt: string) {
+  const item = listing.item;
+  const uuid = item?.uuid;
+  if (!uuid) return;
+
+  upsertCardStmt.run(
+    toSqlParams({
+      uuid,
+      listing_name: stringOrNull(listing.listing_name),
+      name: stringOrNull(item.name),
+      team: stringOrNull(item.team),
+      team_short_name: stringOrNull(item.team_short_name),
+      rarity: stringOrNull(item.rarity),
+      ovr: toInt(item.ovr),
+      series: stringOrNull(item.series),
+      display_position: stringOrNull(item.display_position),
+      best_sell_price: toInt(listing.best_sell_price),
+      best_buy_price: toInt(listing.best_buy_price),
+      raw_json: JSON.stringify(listing),
+      updated_at: updatedAt,
+    }),
+  );
+}
+
+function normalizeCompletedOrders(
+  uuid: string,
+  orders: CompletedOrder[],
+): NormalizedOrder[] {
+  const seen = new Map<string, number>();
+  const normalized: NormalizedOrder[] = [];
+
+  for (const order of orders) {
+    const orderTimeText = stringOrNull(order.date);
+    const orderTime = normalizeOrderTime(orderTimeText);
+    const price = toInt(order.price);
+    if (!orderTimeText || !orderTime || price === null) continue;
+
+    const duplicateKey = `${orderTime}|${price}`;
+    const duplicateOrdinal = (seen.get(duplicateKey) ?? 0) + 1;
+    seen.set(duplicateKey, duplicateOrdinal);
+
+    const sourceHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify({ uuid, orderTime, price, duplicateOrdinal }))
+      .digest("hex");
+
+    normalized.push({
+      orderTime,
+      orderTimeText,
+      price,
+      duplicateOrdinal,
+      sourceHash,
+      rawJson: JSON.stringify(order),
+    });
+  }
+
+  return normalized;
+}
+
+function insertStoredOrder(
+  uuid: string,
+  order: NormalizedOrder,
+  capturedAt: string,
+): number {
+  const result = insertOrderStmt.run(
+    toSqlParams({
+      uuid,
+      order_time: order.orderTime,
+      order_time_text: order.orderTimeText,
+      price: order.price,
+      duplicate_ordinal: order.duplicateOrdinal,
+      source_hash: order.sourceHash,
+      captured_at: capturedAt,
+      raw_json: order.rawJson,
+    }),
+  );
+
+  return Number(result.changes);
+}
+
+async function requestJson<T>(
+  path: string,
+  searchParams: Record<string, string | number | undefined> = {},
+): Promise<T> {
+  const url = new URL(`${trimTrailingSlash(config.apiBaseUrl)}${path}`);
+
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (value !== undefined && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "mlb-show-market-checker/1.0",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`The Show API returned HTTP ${response.status} for ${url}`);
+  }
+
+  const json = (await response.json()) as T;
+  await sleep(config.requestDelayMs);
+  return json;
+}
+
+async function mapConcurrent<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      await worker(items[index]);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, runWorker),
+  );
+}
+
+function withTransaction<T>(fn: () => T): T {
+  db.exec("BEGIN");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+function finishRun(
+  id: number,
+  status: "success" | "error",
+  stats: CollectionStats,
+  error: string | null,
+) {
+  finishRunStmt.run(
+    toSqlParams({
+      id,
+      status,
+      finished_at: stats.finishedAt,
+      cards_seen: stats.cardsSeen,
+      listing_requests: stats.listingRequests,
+      orders_seen: stats.ordersSeen,
+      orders_inserted: stats.ordersInserted,
+      error,
+    }),
+  );
+}
+
+function getCounts() {
+  return {
+    cards: countTable("market_cards"),
+    orders: countTable("stored_completed_orders"),
+    runs: countTable("collector_runs"),
+  };
+}
+
+function getLastRun() {
+  return db
+    .prepare(
+      `
+        SELECT *
+        FROM collector_runs
+        ORDER BY id DESC
+        LIMIT 1
+      `,
+    )
+    .get();
+}
+
+function countTable(tableName: string): number {
+  const row = db
+    .prepare(`SELECT COUNT(*) AS count FROM ${tableName}`)
+    .get() as { count: number };
+  return row.count;
+}
+
+function readConfig(): CollectorConfig {
+  return {
+    apiBaseUrl:
+      process.env.SHOW_API_BASE_URL ?? "https://mlb26.theshow.com/apis",
+    concurrency: readInt("COLLECTOR_CONCURRENCY", 4),
+    dbPath: process.env.MARKET_DB_PATH ?? "market.sqlite",
+    intervalMs: readInt("COLLECTOR_INTERVAL_MS", 60 * 60 * 1000),
+    port: readInt("MARKET_SERVER_PORT", 4000),
+    requestDelayMs: readInt("REQUEST_DELAY_MS", 150),
+  };
+}
+
+function parseCliOptions() {
+  const args = process.argv.slice(2);
+  let limit: number | null = null;
+
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === "--limit") {
+      limit = clampOptionalInt(args[index + 1]);
+      index += 1;
+    }
+  }
+
+  return {
+    limit,
+    once: args.includes("--once"),
+  };
+}
+
+function clampOptionalInt(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(Math.trunc(parsed), 0) : null;
+}
+
+function clampInt(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(raw);
+  const int = Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
+  return Math.min(Math.max(int, min), max);
+}
+
+function readInt(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
+}
+
+function normalizeOrderTime(value: string | null): string | null {
+  if (!value) return null;
+
+  const match = value.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/,
+  );
+  if (!match) return null;
+
+  return `${match[3]}-${pad2(Number(match[1]))}-${pad2(Number(match[2]))} ${pad2(
+    Number(match[4]),
+  )}:${match[5]}:${match[6]}`;
+}
+
+function toSqlDateTime(value: Date): string {
+  return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(
+    value.getDate(),
+  )} ${pad2(value.getHours())}:${pad2(value.getMinutes())}:${pad2(
+    value.getSeconds(),
+  )}`;
+}
+
+function toInt(value: unknown): number | null {
+  if (value === null || value === undefined || value === "" || value === "-") {
+    return null;
+  }
+
+  const normalized = typeof value === "string" ? value.replace(/,/g, "") : value;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toSqlParams(value: SqlParams): SqlParams {
+  return value;
+}
+
+function windowlessSetInterval(fn: () => void, ms: number) {
+  return setInterval(fn, ms);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

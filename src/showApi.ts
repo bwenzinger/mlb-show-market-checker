@@ -86,6 +86,33 @@ export async function fetchListingByUuid(uuid: string): Promise<Listing> {
   return requestJson<Listing>("/listing.json", { uuid });
 }
 
+export async function fetchStoredCompletedOrders({
+  days = 7,
+  uuid,
+}: {
+  days?: number;
+  uuid: string;
+}): Promise<CompletedOrder[]> {
+  const url = new URL(
+    `/history-api/cards/${encodeURIComponent(uuid)}/orders`,
+    window.location.href,
+  );
+  url.searchParams.set("days", String(days));
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Local history API returned HTTP ${response.status}`);
+  }
+
+  const json = (await response.json()) as { orders?: CompletedOrder[] };
+  return json.orders ?? [];
+}
+
 async function requestJson<T>(
   path: string,
   searchParams: Record<string, string | number | undefined> = {},

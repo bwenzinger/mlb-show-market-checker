@@ -31,6 +31,7 @@ import {
 import {
   fetchListingByUuid,
   fetchListings,
+  fetchStoredCompletedOrders,
   type CompletedOrder,
   type Listing,
   type ListingPriceHistoryPoint,
@@ -70,6 +71,9 @@ export default function App() {
   const [listingError, setListingError] = useState("");
   const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [storedCompletedOrders, setStoredCompletedOrders] = useState<
+    CompletedOrder[] | null
+  >(null);
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [detailError, setDetailError] = useState("");
 
@@ -155,13 +159,46 @@ export default function App() {
     };
   }, [selectedUuid]);
 
+  useEffect(() => {
+    if (!selectedUuid) {
+      setStoredCompletedOrders(null);
+      return;
+    }
+
+    let active = true;
+    const uuid = selectedUuid;
+    setStoredCompletedOrders(null);
+
+    async function loadStoredOrders() {
+      try {
+        const orders = await fetchStoredCompletedOrders({ days: 7, uuid });
+        if (!active) return;
+        setStoredCompletedOrders(orders.length > 0 ? orders : null);
+      } catch {
+        if (!active) return;
+        setStoredCompletedOrders(null);
+      }
+    }
+
+    void loadStoredOrders();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedUuid]);
+
   const priceHistory = useMemo(
     () => normalizePriceHistory(selectedListing?.price_history ?? []),
     [selectedListing],
   );
   const completedOrders = useMemo(
-    () => normalizeOrders(selectedListing?.completed_orders ?? []),
-    [selectedListing],
+    () =>
+      normalizeOrders(
+        storedCompletedOrders?.length
+          ? storedCompletedOrders
+          : (selectedListing?.completed_orders ?? []),
+      ),
+    [selectedListing, storedCompletedOrders],
   );
   const orderBuckets = useMemo(
     () => bucketOrdersByHour(completedOrders),
@@ -187,6 +224,9 @@ export default function App() {
   const averageOrderPrice = average(
     completedOrders.map((order) => order.price),
   );
+  const completedOrdersSource = storedCompletedOrders?.length
+    ? "Local database"
+    : "Live API sample";
   const cardImage =
     selectedListing?.item?.baked_img_lg ??
     selectedListing?.item?.baked_img ??
@@ -213,12 +253,6 @@ export default function App() {
             Live card market
           </Typography>
         </Box>
-        <Paper variant="outlined" sx={{ minWidth: { md: 240 }, p: 1.5 }}>
-          <Typography variant="caption" color="text.secondary">
-            Source
-          </Typography>
-          <Typography fontWeight={800}>mlb26.theshow.com</Typography>
-        </Paper>
       </Stack>
 
       <Box
@@ -341,7 +375,7 @@ export default function App() {
 
               <ChartCard
                 title="Completed orders by hour"
-                meta={`${completedOrders.length} orders`}
+                meta={`${completedOrders.length} orders - ${completedOrdersSource}`}
               >
                 <OrderChart buckets={orderBuckets} />
               </ChartCard>
@@ -350,7 +384,7 @@ export default function App() {
             <Paper variant="outlined" sx={{ p: 1.75 }}>
               <SectionHeading
                 title="Recent completed orders"
-                meta={`${earliestOrder} to ${latestOrder}`}
+                meta={`${completedOrdersSource}: ${earliestOrder} to ${latestOrder}`}
               />
               <TableContainer sx={{ maxHeight: 360 }}>
                 <Table

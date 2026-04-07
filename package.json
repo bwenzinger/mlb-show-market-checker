@@ -6,8 +6,11 @@
     "node": ">=25.0.0"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n history,web -c green,cyan \"npm:market-server\" \"wait-on tcp:127.0.0.1:4000 && npm run dev:web\"",
+    "dev:web": "vite",
     "build": "tsc --noEmit && vite build",
+    "collect:once": "tsx src/server/marketServer.ts --once",
+    "market-server": "tsx src/server/marketServer.ts",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
@@ -15,14 +18,20 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^7.3.9",
+    "express": "^5.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vite": "^7.1.10"
+    "vite": "^7.1.10",
+    "wait-on": "^9.0.4"
   }
 }
