@@ -5,7 +5,8 @@ export type ItemType =
   | "sponsorship"
   | "unlockable";
 
-export type SortKey = "rank" | "best_sell_price" | "best_buy_price";
+export type ApiSortKey = "rank" | "best_sell_price" | "best_buy_price";
+export type SortKey = ApiSortKey | "spread_number" | "spread_percentage";
 export type SortOrder = "asc" | "desc";
 
 export interface ShowItem {
@@ -69,7 +70,7 @@ export async function fetchListings({
   page?: number;
   name?: string;
   rarity?: string;
-  sort?: SortKey;
+  sort?: ApiSortKey;
   order?: SortOrder;
 } = {}): Promise<ListingsResponse> {
   return requestJson<ListingsResponse>("/listings.json", {

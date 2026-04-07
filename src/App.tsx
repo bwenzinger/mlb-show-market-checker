@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Avatar,
@@ -31,6 +31,7 @@ import {
 import {
   fetchListingByUuid,
   fetchListings,
+  type ApiSortKey,
   fetchStoredCompletedOrders,
   type CompletedOrder,
   type Listing,
@@ -60,6 +61,13 @@ interface OrderBucket {
 }
 
 const rarityOptions = ["", "diamond", "gold", "silver", "bronze", "common"];
+const sortOptions: Array<{ label: string; value: SortKey }> = [
+  { label: "Buy now", value: "best_sell_price" },
+  { label: "Sell now", value: "best_buy_price" },
+  { label: "Spread", value: "spread_number" },
+  { label: "Spread %", value: "spread_percentage" },
+  { label: "Overall", value: "rank" },
+];
 
 export default function App() {
   const [searchText, setSearchText] = useState("");
@@ -76,6 +84,11 @@ export default function App() {
   >(null);
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [detailError, setDetailError] = useState("");
+  const selectedUuidRef = useRef(selectedUuid);
+
+  useEffect(() => {
+    selectedUuidRef.current = selectedUuid;
+  }, [selectedUuid]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -93,26 +106,24 @@ export default function App() {
       setListingError("");
 
       try {
-        const response = await fetchListings({
-          page: 1,
+        const nextListings = await fetchSortedListings({
           name: query || undefined,
           rarity: rarity || undefined,
           sort,
-          order: sortOrderFor(sort),
         });
 
         if (!active) return;
 
-        const nextListings = response.listings ?? [];
         setListings(nextListings);
         setListingState("ready");
 
         const firstUuid = nextListings[0]?.item?.uuid;
+        const currentSelectedUuid = selectedUuidRef.current;
         const selectedUuidStillVisible = nextListings.some(
-          (listing) => listing.item?.uuid === selectedUuid,
+          (listing) => listing.item?.uuid === currentSelectedUuid,
         );
 
-        if (firstUuid && (!selectedUuid || !selectedUuidStillVisible)) {
+        if (firstUuid && (!currentSelectedUuid || !selectedUuidStillVisible)) {
           setSelectedUuid(firstUuid);
         }
       } catch (error) {
@@ -128,7 +139,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [query, rarity, sort, selectedUuid]);
+  }, [query, rarity, sort]);
 
   useEffect(() => {
     if (!selectedUuid) return;
@@ -220,6 +231,10 @@ export default function App() {
   const currentSpread =
     bestBuy !== null && bestSell !== null
       ? Math.max(bestSell - bestBuy, 0)
+      : null;
+  const currentSpreadPercentage =
+    currentSpread !== null && bestSell !== null && bestSell > 0
+      ? (currentSpread / bestSell) * 100
       : null;
   const averageOrderPrice = average(
     completedOrders.map((order) => order.price),
@@ -350,7 +365,10 @@ export default function App() {
             >
               <Metric label="Buy now" value={formatStubs(bestSell)} />
               <Metric label="Sell now" value={formatStubs(bestBuy)} />
-              <Metric label="Spread" value={formatStubs(currentSpread)} />
+              <Metric
+                label="Spread"
+                value={formatSpread(currentSpread, currentSpreadPercentage)}
+              />
               <Metric
                 label="Average order"
                 value={formatStubs(averageOrderPrice)}
@@ -494,12 +512,20 @@ function SearchPanel({
               }
               value={sort}
             >
-              <MenuItem value="best_sell_price">Buy now</MenuItem>
-              <MenuItem value="best_buy_price">Sell now</MenuItem>
-              <MenuItem value="rank">Overall</MenuItem>
+              {sortOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Stack>
+
+        {isSpreadSort(sort) ? (
+          <Alert severity="info" sx={{ py: 0.5 }}>
+            Spread sorts hide cards with Sell now at 0.
+          </Alert>
+        ) : null}
 
         {listingState === "error" ? (
           <Alert severity="error">{listingError}</Alert>
@@ -522,6 +548,7 @@ function SearchPanel({
               const active = uuid === selectedUuid;
               const image =
                 listing.item?.baked_img ?? listing.item?.img ?? undefined;
+              const metric = getListingSortMetric(listing, sort);
 
               return (
                 <ListItemButton
@@ -556,9 +583,14 @@ function SearchPanel({
                     } - ${listing.item?.ovr ?? "?"}`}
                     secondaryTypographyProps={{ noWrap: true }}
                   />
-                  <Typography color="secondary" fontWeight={900}>
-                    {formatStubs(toNumber(listing.best_sell_price))}
-                  </Typography>
+                  <Box sx={{ flex: "0 0 auto", textAlign: "right" }}>
+                    <Typography color="secondary" fontWeight={900}>
+                      {metric.value}
+                    </Typography>
+                    <Typography color="text.secondary" variant="caption">
+                      {metric.label}
+                    </Typography>
+                  </Box>
                 </ListItemButton>
               );
             })}
@@ -1015,7 +1047,188 @@ function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function sortOrderFor(sort: SortKey): "asc" | "desc" {
+async function fetchSortedListings({
+  name,
+  rarity,
+  sort,
+}: {
+  name?: string;
+  rarity?: string;
+  sort: SortKey;
+}): Promise<Listing[]> {
+  const apiSort = apiSortFor(sort);
+  const order = sortOrderFor(apiSort);
+  const firstResponse = await fetchListings({
+    page: 1,
+    name,
+    rarity,
+    sort: apiSort,
+    order,
+  });
+
+  if (!isSpreadSort(sort)) {
+    return firstResponse.listings ?? [];
+  }
+
+  const totalPages = Math.max(Number(firstResponse.total_pages) || 1, 1);
+  const remainingPages = Array.from(
+    { length: totalPages - 1 },
+    (_, index) => index + 2,
+  );
+  const remainingListings = await mapWithConcurrency(
+    remainingPages,
+    6,
+    async (page) => {
+      const response = await fetchListings({
+        page,
+        name,
+        rarity,
+        sort: apiSort,
+        order,
+      });
+
+      return response.listings ?? [];
+    },
+  );
+
+  const spreadCandidates = [
+    ...(firstResponse.listings ?? []),
+    ...remainingListings.flat(),
+  ].filter(hasNonZeroSellNow);
+
+  return sortListingsBySpread(spreadCandidates, sort);
+}
+
+function apiSortFor(sort: SortKey): ApiSortKey {
+  return isSpreadSort(sort) ? "rank" : sort;
+}
+
+function isSpreadSort(
+  sort: SortKey,
+): sort is "spread_number" | "spread_percentage" {
+  return sort === "spread_number" || sort === "spread_percentage";
+}
+
+function sortListingsBySpread(listings: Listing[], sort: SortKey): Listing[] {
+  return listings.slice().sort((a, b) => {
+    const aValue = listingSpreadSortValue(a, sort);
+    const bValue = listingSpreadSortValue(b, sort);
+
+    if (aValue === null && bValue === null) return 0;
+    if (aValue === null) return 1;
+    if (bValue === null) return -1;
+
+    return (
+      bValue - aValue ||
+      (getListingPrices(b).buyNow ?? 0) - (getListingPrices(a).buyNow ?? 0) ||
+      (a.listing_name ?? "").localeCompare(b.listing_name ?? "")
+    );
+  });
+}
+
+function listingSpreadSortValue(
+  listing: Listing,
+  sort: SortKey,
+): number | null {
+  return sort === "spread_percentage"
+    ? listingSpreadPercentage(listing)
+    : listingSpreadNumber(listing);
+}
+
+function getListingSortMetric(
+  listing: Listing,
+  sort: SortKey,
+): { label: string; value: string } {
+  const prices = getListingPrices(listing);
+
+  if (sort === "best_buy_price") {
+    return { label: "Sell now", value: formatStubs(prices.sellNow) };
+  }
+
+  if (sort === "spread_number") {
+    return {
+      label: "Spread",
+      value: formatStubs(listingSpreadNumber(listing)),
+    };
+  }
+
+  if (sort === "spread_percentage") {
+    return {
+      label: "Spread",
+      value: formatPercent(listingSpreadPercentage(listing)),
+    };
+  }
+
+  return { label: "Buy now", value: formatStubs(prices.buyNow) };
+}
+
+function getListingPrices(listing: Listing): {
+  buyNow: number | null;
+  sellNow: number | null;
+} {
+  return {
+    buyNow: toNumber(listing.best_sell_price),
+    sellNow: toNumber(listing.best_buy_price),
+  };
+}
+
+function listingSpreadNumber(listing: Listing): number | null {
+  const { buyNow, sellNow } = getListingPrices(listing);
+  if (buyNow === null || sellNow === null || sellNow <= 0) return null;
+  return Math.max(buyNow - sellNow, 0);
+}
+
+function listingSpreadPercentage(listing: Listing): number | null {
+  const spread = listingSpreadNumber(listing);
+  const { buyNow } = getListingPrices(listing);
+  if (spread === null || buyNow === null || buyNow <= 0) return null;
+  return (spread / buyNow) * 100;
+}
+
+function hasNonZeroSellNow(listing: Listing): boolean {
+  const { sellNow } = getListingPrices(listing);
+  return sellNow !== null && sellNow > 0;
+}
+
+function formatPercent(value: number | null): string {
+  if (value === null) return "-";
+  return `${value.toLocaleString("en-US", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  })}%`;
+}
+
+function formatSpread(
+  spread: number | null,
+  percentage: number | null,
+): string {
+  if (spread === null) return "-";
+  return `${formatStubs(spread)} (${formatPercent(percentage)})`;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex]);
+      }
+    }),
+  );
+
+  return results;
+}
+
+function sortOrderFor(sort: ApiSortKey): "asc" | "desc" {
   if (sort === "best_sell_price") return "asc";
   return "desc";
 }
