@@ -61,6 +61,13 @@ interface OrderBucket {
   saleCount: number;
 }
 
+interface FilterState {
+  minSpreadForPercent: number;
+  rarity: string;
+  searchText: string;
+  sort: SortKey;
+}
+
 const rarityOptions = ["", "diamond", "gold", "silver", "bronze", "common"];
 const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: "Buy now", value: "best_sell_price" },
@@ -71,18 +78,20 @@ const sortOptions: Array<{ label: string; value: SortKey }> = [
 ];
 const LISTING_CACHE_MS = 60_000;
 const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
+const DEFAULT_SORT: SortKey = "spread_percentage";
 const fullListingsCache = new Map<
   string,
   { expiresAt: number; promise: Promise<Listing[]> }
 >();
 
 export default function App() {
-  const [searchText, setSearchText] = useState("");
-  const [query, setQuery] = useState("");
-  const [rarity, setRarity] = useState("");
-  const [sort, setSort] = useState<SortKey>("spread_percentage");
+  const initialFilters = useMemo(readFiltersFromUrl, []);
+  const [searchText, setSearchText] = useState(initialFilters.searchText);
+  const [query, setQuery] = useState(initialFilters.searchText.trim());
+  const [rarity, setRarity] = useState(initialFilters.rarity);
+  const [sort, setSort] = useState<SortKey>(initialFilters.sort);
   const [minSpreadForPercent, setMinSpreadForPercent] = useState(
-    DEFAULT_MIN_SPREAD_FOR_PERCENT,
+    initialFilters.minSpreadForPercent,
   );
   const [listings, setListings] = useState<Listing[]>([]);
   const [listingState, setListingState] = useState<LoadState>("idle");
@@ -99,6 +108,15 @@ export default function App() {
   useEffect(() => {
     selectedUuidRef.current = selectedUuid;
   }, [selectedUuid]);
+
+  useEffect(() => {
+    writeFiltersToUrl({
+      minSpreadForPercent,
+      rarity,
+      searchText,
+      sort,
+    });
+  }, [minSpreadForPercent, rarity, searchText, sort]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1079,6 +1097,93 @@ function formatDateTime(value: Date): string {
 
 function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function readFiltersFromUrl(): FilterState {
+  if (typeof window === "undefined") {
+    return defaultFilters();
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const searchText = searchParams.get("q") ?? "";
+  const rarity = parseRarity(searchParams.get("rarity"));
+  const sort = parseSort(searchParams.get("sort"));
+  const minSpreadForPercent = parseMinSpread(
+    searchParams.get("minSpread") ?? searchParams.get("min_spread"),
+  );
+
+  return {
+    minSpreadForPercent,
+    rarity,
+    searchText,
+    sort,
+  };
+}
+
+function writeFiltersToUrl({
+  minSpreadForPercent,
+  rarity,
+  searchText,
+  sort,
+}: FilterState) {
+  if (typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+  setSearchParam(url.searchParams, "q", searchText.trim());
+  setSearchParam(url.searchParams, "rarity", rarity);
+  url.searchParams.set("sort", sort);
+  url.searchParams.set("minSpread", String(Math.max(minSpreadForPercent, 0)));
+
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl !== currentUrl) {
+    window.history.replaceState(window.history.state, "", nextUrl);
+  }
+}
+
+function defaultFilters(): FilterState {
+  return {
+    minSpreadForPercent: DEFAULT_MIN_SPREAD_FOR_PERCENT,
+    rarity: "",
+    searchText: "",
+    sort: DEFAULT_SORT,
+  };
+}
+
+function parseRarity(value: string | null): string {
+  if (!value) return "";
+
+  const normalized = value.toLowerCase();
+  return rarityOptions.includes(normalized) ? normalized : "";
+}
+
+function parseSort(value: string | null): SortKey {
+  return sortOptions.some((option) => option.value === value)
+    ? (value as SortKey)
+    : DEFAULT_SORT;
+}
+
+function parseMinSpread(value: string | null): number {
+  if (value === null || value.trim() === "") {
+    return DEFAULT_MIN_SPREAD_FOR_PERCENT;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? Math.max(Math.trunc(parsed), 0)
+    : DEFAULT_MIN_SPREAD_FOR_PERCENT;
+}
+
+function setSearchParam(
+  searchParams: URLSearchParams,
+  key: string,
+  value: string,
+) {
+  if (value) {
+    searchParams.set(key, value);
+  } else {
+    searchParams.delete(key);
+  }
 }
 
 async function fetchSortedListings({
