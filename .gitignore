@@ -1,0 +1,6 @@
+node_modules/
+dist/
+market.sqlite
+market.sqlite-*
+.env
+.env.local
