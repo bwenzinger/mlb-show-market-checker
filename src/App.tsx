@@ -80,7 +80,7 @@ export default function App() {
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
   const [rarity, setRarity] = useState("");
-  const [sort, setSort] = useState<SortKey>("best_sell_price");
+  const [sort, setSort] = useState<SortKey>("spread_percentage");
   const [minSpreadForPercent, setMinSpreadForPercent] = useState(
     DEFAULT_MIN_SPREAD_FOR_PERCENT,
   );
