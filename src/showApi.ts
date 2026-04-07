@@ -6,7 +6,11 @@ export type ItemType =
   | "unlockable";
 
 export type ApiSortKey = "rank" | "best_sell_price" | "best_buy_price";
-export type SortKey = ApiSortKey | "spread_number" | "spread_percentage";
+export type SortKey =
+  | ApiSortKey
+  | "spread_number"
+  | "spread_percentage"
+  | "profit";
 export type SortOrder = "asc" | "desc";
 
 export interface ShowItem {

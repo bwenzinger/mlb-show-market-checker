@@ -74,9 +74,11 @@ const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: "Sell now", value: "best_buy_price" },
   { label: "Spread", value: "spread_number" },
   { label: "Spread %", value: "spread_percentage" },
+  { label: "Profit", value: "profit" },
   { label: "Overall", value: "rank" },
 ];
 const LISTING_CACHE_MS = 60_000;
+const SALE_TAX_RATE = 0.1;
 const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
 const DEFAULT_SORT: SortKey = "spread_percentage";
 const fullListingsCache = new Map<
@@ -265,6 +267,10 @@ export default function App() {
     currentSpread !== null && bestSell !== null && bestSell > 0
       ? (currentSpread / bestSell) * 100
       : null;
+  const currentProfit =
+    bestBuy !== null && bestSell !== null
+      ? calculateProfit({ buyNow: bestSell, sellNow: bestBuy })
+      : null;
   const averageOrderPrice = average(
     completedOrders.map((order) => order.price),
   );
@@ -395,9 +401,10 @@ export default function App() {
             >
               <Metric label="Buy now" value={formatStubs(bestSell)} />
               <Metric label="Sell now" value={formatStubs(bestBuy)} />
-              <Metric
-                label="Spread"
-                value={formatSpread(currentSpread, currentSpreadPercentage)}
+              <ProfitMetric
+                profit={currentProfit}
+                spread={currentSpread}
+                spreadPercentage={currentSpreadPercentage}
               />
               <Metric
                 label="Average order"
@@ -666,6 +673,61 @@ function Metric({ label, value }: { label: string; value: string }) {
       >
         {value}
       </Typography>
+    </Paper>
+  );
+}
+
+function ProfitMetric({
+  profit,
+  spread,
+  spreadPercentage,
+}: {
+  profit: number | null;
+  spread: number | null;
+  spreadPercentage: number | null;
+}) {
+  const profitColor =
+    profit === null ? "text.primary" : profit > 0 ? "success.main" : "error.main";
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        borderColor:
+          profit !== null && profit > 0 ? "success.dark" : "divider",
+        minWidth: 0,
+        p: 1.5,
+      }}
+    >
+      <Typography color="text.secondary" variant="caption">
+        Profit after 10% tax
+      </Typography>
+      <Typography
+        color={profitColor}
+        fontWeight={950}
+        lineHeight={1.05}
+        sx={{ overflowWrap: "anywhere" }}
+        variant="h5"
+      >
+        {formatStubs(profit)}
+      </Typography>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: "baseline",
+          flexWrap: "wrap",
+          mt: 0.75,
+          rowGap: 0.25,
+        }}
+      >
+        <Typography color="text.secondary" fontWeight={800} variant="body2">
+          {formatPercent(spreadPercentage)} spread
+        </Typography>
+        <Typography color="text.secondary" variant="caption">
+          raw {formatStubs(spread)}
+        </Typography>
+      </Stack>
     </Paper>
   );
 }
@@ -1133,6 +1195,8 @@ function writeFiltersToUrl({
   setSearchParam(url.searchParams, "rarity", rarity);
   url.searchParams.set("sort", sort);
   url.searchParams.set("minSpread", String(Math.max(minSpreadForPercent, 0)));
+  url.searchParams.delete("minProfit");
+  url.searchParams.delete("min_profit");
 
   const nextUrl = `${url.pathname}${url.search}${url.hash}`;
   const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -1348,8 +1412,12 @@ function compactSearchText(value: string): string {
 
 function isSpreadSort(
   sort: SortKey,
-): sort is "spread_number" | "spread_percentage" {
-  return sort === "spread_number" || sort === "spread_percentage";
+): sort is "spread_number" | "spread_percentage" | "profit" {
+  return (
+    sort === "spread_number" ||
+    sort === "spread_percentage" ||
+    sort === "profit"
+  );
 }
 
 function filterListingsForSpreadSort(
@@ -1387,6 +1455,10 @@ function listingSpreadSortValue(
   listing: Listing,
   sort: SortKey,
 ): number | null {
+  if (sort === "profit") {
+    return listingProfit(listing);
+  }
+
   return sort === "spread_percentage"
     ? listingSpreadPercentage(listing)
     : listingSpreadNumber(listing);
@@ -1416,6 +1488,13 @@ function getListingSortMetric(
     };
   }
 
+  if (sort === "profit") {
+    return {
+      label: "Profit",
+      value: formatStubs(listingProfit(listing)),
+    };
+  }
+
   return { label: "Buy now", value: formatStubs(prices.buyNow) };
 }
 
@@ -1430,9 +1509,7 @@ function getListingPrices(listing: Listing): {
 }
 
 function listingSpreadNumber(listing: Listing): number | null {
-  const { buyNow, sellNow } = getListingPrices(listing);
-  if (buyNow === null || sellNow === null || sellNow <= 0) return null;
-  return Math.max(buyNow - sellNow, 0);
+  return calculateSpread(getListingPrices(listing));
 }
 
 function listingSpreadPercentage(listing: Listing): number | null {
@@ -1440,6 +1517,33 @@ function listingSpreadPercentage(listing: Listing): number | null {
   const { buyNow } = getListingPrices(listing);
   if (spread === null || buyNow === null || buyNow <= 0) return null;
   return (spread / buyNow) * 100;
+}
+
+function listingProfit(listing: Listing): number | null {
+  return calculateProfit(getListingPrices(listing));
+}
+
+function calculateProfit({
+  buyNow,
+  sellNow,
+}: {
+  buyNow: number | null;
+  sellNow: number | null;
+}): number | null {
+  const spread = calculateSpread({ buyNow, sellNow });
+  if (spread === null || buyNow === null) return null;
+  return Math.floor(spread - buyNow * SALE_TAX_RATE);
+}
+
+function calculateSpread({
+  buyNow,
+  sellNow,
+}: {
+  buyNow: number | null;
+  sellNow: number | null;
+}): number | null {
+  if (buyNow === null || sellNow === null || sellNow <= 0) return null;
+  return Math.max(buyNow - sellNow, 0);
 }
 
 function hasNonZeroSellNow(listing: Listing): boolean {
@@ -1453,14 +1557,6 @@ function formatPercent(value: number | null): string {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
   })}%`;
-}
-
-function formatSpread(
-  spread: number | null,
-  percentage: number | null,
-): string {
-  if (spread === null) return "-";
-  return `${formatStubs(spread)} (${formatPercent(percentage)})`;
 }
 
 async function mapWithConcurrency<T, R>(
