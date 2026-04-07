@@ -1,5 +1,3 @@
-import { config } from "./config.js";
-
 export type ItemType =
   | "mlb_card"
   | "stadium"
@@ -7,13 +5,15 @@ export type ItemType =
   | "sponsorship"
   | "unlockable";
 
-export type SearchParamValue = string | number | boolean | null | undefined;
+export type SortKey = "rank" | "best_sell_price" | "best_buy_price";
+export type SortOrder = "asc" | "desc";
 
 export interface ShowItem {
-  uuid?: string;
+  uuid: string;
   type?: string;
   img?: string | null;
   baked_img?: string | null;
+  baked_img_lg?: string | null;
   name?: string | null;
   rarity?: string | null;
   team?: string | null;
@@ -21,6 +21,7 @@ export interface ShowItem {
   ovr?: number | null;
   series?: string | null;
   display_position?: string | null;
+  display_secondary_positions?: string | null;
   is_hitter?: boolean | null;
   is_sellable?: boolean | null;
   bat_hand?: string | null;
@@ -29,114 +30,87 @@ export interface ShowItem {
   [key: string]: unknown;
 }
 
-export interface ItemsResponse {
-  page?: number;
-  per_page?: number;
-  total_pages?: number;
-  items?: ShowItem[];
-  data?: ShowItem[];
-  [key: string]: unknown;
-}
-
 export interface ListingPriceHistoryPoint {
   date?: string | null;
   best_buy_price?: number | string | null;
   best_sell_price?: number | string | null;
-  [key: string]: unknown;
 }
 
-export interface CompletedOrderResponse {
+export interface CompletedOrder {
   date?: string | null;
   price?: number | string | null;
-  quantity?: number | string | null;
-  qty?: number | string | null;
-  [key: string]: unknown;
 }
 
-export interface ListingResponse {
+export interface Listing {
   listing_name?: string | null;
   best_sell_price?: number | string | null;
   best_buy_price?: number | string | null;
   item?: ShowItem | null;
   price_history?: ListingPriceHistoryPoint[];
-  completed_orders?: CompletedOrderResponse[];
-  [key: string]: unknown;
+  completed_orders?: CompletedOrder[];
 }
 
 export interface ListingsResponse {
+  page: number;
+  per_page: number;
+  total_pages: number;
+  listings: Listing[];
+}
+
+const API_BASE = import.meta.env.VITE_SHOW_API_BASE ?? "/show-api";
+
+export async function fetchListings({
+  page = 1,
+  name,
+  rarity,
+  sort = "rank",
+  order = "desc",
+}: {
   page?: number;
-  per_page?: number;
-  total_pages?: number;
-  listings?: ListingResponse[];
-  [key: string]: unknown;
+  name?: string;
+  rarity?: string;
+  sort?: SortKey;
+  order?: SortOrder;
+} = {}): Promise<ListingsResponse> {
+  return requestJson<ListingsResponse>("/listings.json", {
+    type: "mlb_card",
+    page,
+    name,
+    rarity,
+    sort,
+    order,
+  });
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export async function fetchListingByUuid(uuid: string): Promise<Listing> {
+  return requestJson<Listing>("/listing.json", { uuid });
 }
 
-export async function requestJson<T>(
+async function requestJson<T>(
   path: string,
-  searchParams: Record<string, SearchParamValue> = {},
+  searchParams: Record<string, string | number | undefined> = {},
 ): Promise<T> {
-  const url = new URL(path, config.showApiBase);
+  const url = new URL(`${trimTrailingSlash(API_BASE)}${path}`, window.location.href);
 
   for (const [key, value] of Object.entries(searchParams)) {
-    if (value !== undefined && value !== null) {
+    if (value !== undefined && value !== "") {
       url.searchParams.set(key, String(value));
     }
   }
 
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "mlb-show-market-checker/1.0",
       Accept: "application/json",
     },
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(
-      `HTTP ${response.status} for ${url.toString()} - ${text.slice(0, 300)}`,
-    );
+    throw new Error(`The Show API returned HTTP ${response.status}`);
   }
 
-  const json = (await response.json()) as T;
-  await sleep(config.requestDelayMs);
-  return json;
+  return (await response.json()) as T;
 }
 
-export async function fetchItemsPage({
-  type = "mlb_card",
-  page = 1,
-}: {
-  type?: ItemType;
-  page?: number;
-} = {}): Promise<ItemsResponse> {
-  return requestJson<ItemsResponse>("/apis/items.json", { type, page });
-}
-
-export async function fetchListingByUuid(
-  uuid: string,
-): Promise<ListingResponse> {
-  return requestJson<ListingResponse>("/apis/listing.json", { uuid });
-}
-
-export async function fetchListingsPage({
-  type = "mlb_card",
-  page = 1,
-  sort = "rank",
-  order = "desc",
-}: {
-  type?: ItemType;
-  page?: number;
-  sort?: "rank" | "best_sell_price" | "best_buy_price";
-  order?: "asc" | "desc";
-} = {}): Promise<ListingsResponse> {
-  return requestJson<ListingsResponse>("/apis/listings.json", {
-    type,
-    page,
-    sort,
-    order,
-  });
+function trimTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
 }
