@@ -70,6 +70,7 @@ const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: "Overall", value: "rank" },
 ];
 const LISTING_CACHE_MS = 60_000;
+const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
 const fullListingsCache = new Map<
   string,
   { expiresAt: number; promise: Promise<Listing[]> }
@@ -80,6 +81,9 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [rarity, setRarity] = useState("");
   const [sort, setSort] = useState<SortKey>("best_sell_price");
+  const [minSpreadForPercent, setMinSpreadForPercent] = useState(
+    DEFAULT_MIN_SPREAD_FOR_PERCENT,
+  );
   const [listings, setListings] = useState<Listing[]>([]);
   const [listingState, setListingState] = useState<LoadState>("idle");
   const [listingError, setListingError] = useState("");
@@ -114,6 +118,7 @@ export default function App() {
       try {
         const nextListings = await fetchSortedListings({
           name: query || undefined,
+          minSpreadForPercent,
           rarity: rarity || undefined,
           sort,
         });
@@ -145,7 +150,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [query, rarity, sort]);
+  }, [minSpreadForPercent, query, rarity, sort]);
 
   useEffect(() => {
     if (!selectedUuid) return;
@@ -289,9 +294,11 @@ export default function App() {
           listings={listings}
           listingError={listingError}
           listingState={listingState}
+          minSpreadForPercent={minSpreadForPercent}
           rarity={rarity}
           searchText={searchText}
           selectedUuid={selectedUuid}
+          setMinSpreadForPercent={setMinSpreadForPercent}
           setRarity={setRarity}
           setSearchText={setSearchText}
           setSelectedUuid={setSelectedUuid}
@@ -452,9 +459,11 @@ function SearchPanel({
   listings,
   listingError,
   listingState,
+  minSpreadForPercent,
   rarity,
   searchText,
   selectedUuid,
+  setMinSpreadForPercent,
   setRarity,
   setSearchText,
   setSelectedUuid,
@@ -464,9 +473,11 @@ function SearchPanel({
   listings: Listing[];
   listingError: string;
   listingState: LoadState;
+  minSpreadForPercent: number;
   rarity: string;
   searchText: string;
   selectedUuid: string | null;
+  setMinSpreadForPercent: (value: number) => void;
   setRarity: (value: string) => void;
   setSearchText: (value: string) => void;
   setSelectedUuid: (value: string) => void;
@@ -527,9 +538,27 @@ function SearchPanel({
           </FormControl>
         </Stack>
 
+        {sort === "spread_percentage" ? (
+          <TextField
+            fullWidth
+            inputProps={{ min: 0, step: 1 }}
+            label="Minimum spread"
+            onChange={(event) =>
+              setMinSpreadForPercent(
+                Math.max(Number(event.target.value) || 0, 0),
+              )
+            }
+            type="number"
+            value={minSpreadForPercent}
+          />
+        ) : null}
+
         {isSpreadSort(sort) ? (
           <Alert severity="info" sx={{ py: 0.5 }}>
-            Spread sorts hide cards with Sell now at 0.
+            Spread sorts hide cards with Sell now at 0
+            {sort === "spread_percentage"
+              ? ` and spreads below ${formatStubs(minSpreadForPercent)}.`
+              : "."}
           </Alert>
         ) : null}
 
@@ -1054,10 +1083,12 @@ function titleCase(value: string): string {
 }
 
 async function fetchSortedListings({
+  minSpreadForPercent,
   name,
   rarity,
   sort,
 }: {
+  minSpreadForPercent: number;
   name?: string;
   rarity?: string;
   sort: SortKey;
@@ -1067,7 +1098,11 @@ async function fetchSortedListings({
   const normalizedName = normalizeSearchText(name ?? "");
 
   if (normalizedName || isSpreadSort(sort)) {
-    const allListings = await fetchAllListings({ order, rarity, sort: apiSort });
+    const allListings = await fetchAllListings({
+      order,
+      rarity,
+      sort: apiSort,
+    });
     const searchedListings = normalizedName
       ? allListings.filter((listing) =>
           listingMatchesNormalizedSearch(listing, normalizedName),
@@ -1075,7 +1110,14 @@ async function fetchSortedListings({
       : allListings;
 
     return isSpreadSort(sort)
-      ? sortListingsBySpread(searchedListings.filter(hasNonZeroSellNow), sort)
+      ? sortListingsBySpread(
+          filterListingsForSpreadSort(
+            searchedListings,
+            sort,
+            minSpreadForPercent,
+          ),
+          sort,
+        )
       : searchedListings;
   }
 
@@ -1204,6 +1246,20 @@ function isSpreadSort(
   sort: SortKey,
 ): sort is "spread_number" | "spread_percentage" {
   return sort === "spread_number" || sort === "spread_percentage";
+}
+
+function filterListingsForSpreadSort(
+  listings: Listing[],
+  sort: SortKey,
+  minSpreadForPercent: number,
+): Listing[] {
+  return listings.filter((listing) => {
+    if (!hasNonZeroSellNow(listing)) return false;
+    if (sort !== "spread_percentage") return true;
+
+    const spread = listingSpreadNumber(listing);
+    return spread !== null && spread >= minSpreadForPercent;
+  });
 }
 
 function sortListingsBySpread(listings: Listing[], sort: SortKey): Listing[] {
