@@ -36,6 +36,7 @@ import {
   type CompletedOrder,
   type Listing,
   type ListingPriceHistoryPoint,
+  type SortOrder,
   type SortKey,
 } from "./showApi";
 
@@ -68,6 +69,11 @@ const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: "Spread %", value: "spread_percentage" },
   { label: "Overall", value: "rank" },
 ];
+const LISTING_CACHE_MS = 60_000;
+const fullListingsCache = new Map<
+  string,
+  { expiresAt: number; promise: Promise<Listing[]> }
+>();
 
 export default function App() {
   const [searchText, setSearchText] = useState("");
@@ -1058,6 +1064,21 @@ async function fetchSortedListings({
 }): Promise<Listing[]> {
   const apiSort = apiSortFor(sort);
   const order = sortOrderFor(apiSort);
+  const normalizedName = normalizeSearchText(name ?? "");
+
+  if (normalizedName || isSpreadSort(sort)) {
+    const allListings = await fetchAllListings({ order, rarity, sort: apiSort });
+    const searchedListings = normalizedName
+      ? allListings.filter((listing) =>
+          listingMatchesNormalizedSearch(listing, normalizedName),
+        )
+      : allListings;
+
+    return isSpreadSort(sort)
+      ? sortListingsBySpread(searchedListings.filter(hasNonZeroSellNow), sort)
+      : searchedListings;
+  }
+
   const firstResponse = await fetchListings({
     page: 1,
     name,
@@ -1066,7 +1087,60 @@ async function fetchSortedListings({
     order,
   });
 
-  if (!isSpreadSort(sort)) {
+  return firstResponse.listings ?? [];
+}
+
+async function fetchAllListings({
+  order,
+  rarity,
+  sort,
+}: {
+  order: SortOrder;
+  rarity?: string;
+  sort: ApiSortKey;
+}): Promise<Listing[]> {
+  const cacheKey = JSON.stringify({ order, rarity: rarity ?? "", sort });
+  const cached = fullListingsCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.promise;
+  }
+
+  const promise = fetchAllListingsUncached({ order, rarity, sort }).catch(
+    (error) => {
+      if (fullListingsCache.get(cacheKey)?.promise === promise) {
+        fullListingsCache.delete(cacheKey);
+      }
+
+      throw error;
+    },
+  );
+
+  fullListingsCache.set(cacheKey, {
+    expiresAt: Date.now() + LISTING_CACHE_MS,
+    promise,
+  });
+
+  return promise;
+}
+
+async function fetchAllListingsUncached({
+  order,
+  rarity,
+  sort,
+}: {
+  order: SortOrder;
+  rarity?: string;
+  sort: ApiSortKey;
+}): Promise<Listing[]> {
+  const firstResponse = await fetchListings({
+    page: 1,
+    rarity,
+    sort,
+    order,
+  });
+
+  if (firstResponse.total_pages <= 1) {
     return firstResponse.listings ?? [];
   }
 
@@ -1081,9 +1155,8 @@ async function fetchSortedListings({
     async (page) => {
       const response = await fetchListings({
         page,
-        name,
         rarity,
-        sort: apiSort,
+        sort,
         order,
       });
 
@@ -1091,16 +1164,40 @@ async function fetchSortedListings({
     },
   );
 
-  const spreadCandidates = [
-    ...(firstResponse.listings ?? []),
-    ...remainingListings.flat(),
-  ].filter(hasNonZeroSellNow);
-
-  return sortListingsBySpread(spreadCandidates, sort);
+  return [...(firstResponse.listings ?? []), ...remainingListings.flat()];
 }
 
 function apiSortFor(sort: SortKey): ApiSortKey {
   return isSpreadSort(sort) ? "rank" : sort;
+}
+
+function listingMatchesNormalizedSearch(
+  listing: Listing,
+  normalizedNeedle: string,
+): boolean {
+  const normalizedName = normalizeSearchText(
+    [listing.listing_name, listing.item?.name].filter(Boolean).join(" "),
+  );
+
+  return (
+    normalizedName.includes(normalizedNeedle) ||
+    compactSearchText(normalizedName).includes(
+      compactSearchText(normalizedNeedle),
+    )
+  );
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function compactSearchText(value: string): string {
+  return value.replace(/\s+/g, "");
 }
 
 function isSpreadSort(
