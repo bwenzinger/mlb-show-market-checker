@@ -37,6 +37,7 @@ npm ci
 npm run build
 
 chmod +x "$app_dir/start.sh"
+chmod +x "$app_dir/scripts/deploy-from-git.sh"
 
 sudo tee "$service_file" >/dev/null <<EOF
 [Unit]

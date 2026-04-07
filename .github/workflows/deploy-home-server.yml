@@ -1,0 +1,30 @@
+name: Deploy Home Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: home-server-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - linux
+    env:
+      APP_DIR: ${{ vars.APP_DIR }}
+      SERVICE_NAME: ${{ vars.SERVICE_NAME }}
+      GIT_BRANCH: main
+    steps:
+      - name: Check out deploy script
+        uses: actions/checkout@v4
+
+      - name: Deploy existing clone
+        shell: bash
+        run: |
+          export APP_DIR="${APP_DIR:-$HOME/mlb-show-market-checker}"
+          bash "$GITHUB_WORKSPACE/scripts/deploy-from-git.sh"

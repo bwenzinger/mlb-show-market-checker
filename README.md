@@ -81,6 +81,71 @@ curl http://127.0.0.1:4000/api/health
 
 For the closest thing to always-on from one machine, also enable "restore power after AC loss" in BIOS/UEFI, use a UPS, keep the machine on wired ethernet, back up `market.sqlite`, and monitor `/api/health` from somewhere outside your home network.
 
+## Deploy On Push
+
+This repo includes a GitHub Actions workflow for a self-hosted runner on the Ubuntu computer:
+
+```text
+.github/workflows/deploy-home-server.yml
+```
+
+That approach does not require exposing SSH or a deployment webhook to the internet. The Ubuntu machine connects outbound to GitHub, and GitHub sends it a job whenever `main` is pushed.
+
+Avoid running untrusted pull request workflows on this self-hosted runner, especially if the repository is public.
+
+On GitHub, go to:
+
+```text
+Settings -> Actions -> Runners -> New self-hosted runner
+```
+
+Choose Linux and follow GitHub's install commands on the Ubuntu computer. Run the runner as the same Linux user that owns this repo clone if possible.
+
+The workflow expects the live clone to be at:
+
+```bash
+$HOME/mlb-show-market-checker
+```
+
+If your clone lives somewhere else, add a GitHub repository variable:
+
+```text
+APP_DIR=/path/to/mlb-show-market-checker
+```
+
+If your service name is different from `mlb-show-market-checker`, add:
+
+```text
+SERVICE_NAME=your-service-name
+```
+
+The deploy job runs:
+
+```bash
+bash scripts/deploy-from-git.sh
+```
+
+That script refuses to deploy over local uncommitted changes, pulls `origin/main` with a fast-forward merge, runs `npm ci`, runs `npm run build`, then restarts the systemd service.
+
+If your GitHub runner user needs passwordless permission to restart only this service, add a narrow sudoers rule on Ubuntu:
+
+```bash
+whoami
+sudo visudo -f /etc/sudoers.d/mlb-show-market-checker-deploy
+```
+
+Use your Linux username from `whoami`:
+
+```text
+YOUR_USER ALL=NOPASSWD: /bin/systemctl restart mlb-show-market-checker
+```
+
+Then test the deploy script manually:
+
+```bash
+bash scripts/deploy-from-git.sh
+```
+
 ## Useful Commands
 
 ```bash

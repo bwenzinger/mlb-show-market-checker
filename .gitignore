@@ -4,3 +4,4 @@ market.sqlite
 market.sqlite-*
 .env
 .env.local
+.deploy.lock
