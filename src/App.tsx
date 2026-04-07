@@ -23,6 +23,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
   type SelectChangeEvent,
 } from "@mui/material";
@@ -699,15 +700,65 @@ function LineChart({
           strokeWidth="3"
         />
         {points.map((point, index) => {
-          if (point.primary === null) return null;
+          const currentX = xFor(index);
+          const leftX =
+            index === 0 ? 0 : (xFor(index - 1) + currentX) / 2;
+          const rightX =
+            index === points.length - 1
+              ? width
+              : (currentX + xFor(index + 1)) / 2;
+          const columnWidth = Math.max(rightX - leftX, 1);
+          const primaryY =
+            point.primary === null ? null : yFor(point.primary);
+          const secondaryY =
+            point.secondary === null ? null : yFor(point.secondary);
+          if (primaryY === null && secondaryY === null) return null;
+
           return (
-            <circle
-              cx={xFor(index)}
-              cy={yFor(point.primary)}
-              fill="#7dd3a7"
-              key={`${point.label}-primary`}
-              r="3"
-            />
+            <Tooltip
+              arrow
+              enterTouchDelay={0}
+              key={`${point.label}-${index}`}
+              title={
+                <ChartTooltipContent
+                  label={point.label}
+                  primaryLabel={primaryLabel}
+                  primaryValue={point.primary}
+                  secondaryLabel={secondaryLabel}
+                  secondaryValue={point.secondary}
+                />
+              }
+            >
+              <g
+                aria-label={`${point.label}: ${primaryLabel} ${formatStubs(
+                  point.primary,
+                )}, ${secondaryLabel} ${formatStubs(point.secondary)}`}
+                role="img"
+                style={{ cursor: "crosshair", outline: "none" }}
+                tabIndex={0}
+              >
+                <rect
+                  fill="transparent"
+                  height={height}
+                  pointerEvents="all"
+                  stroke="transparent"
+                  width={columnWidth}
+                  x={leftX}
+                  y={0}
+                />
+                {primaryY !== null ? (
+                  <circle cx={currentX} cy={primaryY} fill="#7dd3a7" r="3.5" />
+                ) : null}
+                {secondaryY !== null ? (
+                  <circle
+                    cx={currentX}
+                    cy={secondaryY}
+                    fill="#f7c873"
+                    r="3.5"
+                  />
+                ) : null}
+              </g>
+            </Tooltip>
           );
         })}
       </Box>
@@ -717,6 +768,34 @@ function LineChart({
         <LegendItem color="#f7c873" label={secondaryLabel} />
       </Stack>
     </Box>
+  );
+}
+
+function ChartTooltipContent({
+  label,
+  primaryLabel,
+  primaryValue,
+  secondaryLabel,
+  secondaryValue,
+}: {
+  label: string;
+  primaryLabel: string;
+  primaryValue: number | null;
+  secondaryLabel: string;
+  secondaryValue: number | null;
+}) {
+  return (
+    <Stack spacing={0.5}>
+      <Typography fontWeight={900} variant="body2">
+        {label}
+      </Typography>
+      <Typography variant="caption">
+        {primaryLabel}: {formatStubs(primaryValue)}
+      </Typography>
+      <Typography variant="caption">
+        {secondaryLabel}: {formatStubs(secondaryValue)}
+      </Typography>
+    </Stack>
   );
 }
 
