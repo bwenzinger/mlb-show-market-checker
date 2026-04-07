@@ -1,4 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Avatar,
+  Box,
+  Chip,
+  CircularProgress,
+  Container,
+  FormControl,
+  InputLabel,
+  List,
+  ListItemAvatar,
+  ListItemButton,
+  ListItemText,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+  type SelectChangeEvent,
+} from "@mui/material";
 
 import {
   fetchListingByUuid,
@@ -154,215 +181,400 @@ export default function App() {
   const currentSpread =
     bestBuy !== null && bestSell !== null ? Math.max(bestSell - bestBuy, 0) : null;
   const averageOrderPrice = average(completedOrders.map((order) => order.price));
+  const cardImage =
+    selectedListing?.item?.baked_img_lg ??
+    selectedListing?.item?.baked_img ??
+    selectedListing?.item?.img;
 
   return (
-    <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <p className="eyebrow">MLB The Show 26 Market</p>
-          <h1>Live card market</h1>
-        </div>
-        <div className="header-stat">
-          <span>Source</span>
-          <strong>mlb26.theshow.com</strong>
-        </div>
-      </header>
+    <Container maxWidth={false} sx={{ maxWidth: 1440, py: 3 }}>
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={2}
+        sx={{ alignItems: { xs: "stretch", md: "flex-end" }, mb: 2.5 }}
+      >
+        <Box sx={{ flex: 1 }}>
+          <Typography
+            color="primary"
+            fontSize={12}
+            fontWeight={800}
+            letterSpacing="0.08em"
+            textTransform="uppercase"
+          >
+            MLB The Show 26 Market
+          </Typography>
+          <Typography component="h1" variant="h4" fontWeight={800}>
+            Live card market
+          </Typography>
+        </Box>
+        <Paper variant="outlined" sx={{ minWidth: { md: 240 }, p: 1.5 }}>
+          <Typography variant="caption" color="text.secondary">
+            Source
+          </Typography>
+          <Typography fontWeight={800}>mlb26.theshow.com</Typography>
+        </Paper>
+      </Stack>
 
-      <section className="workspace" aria-label="Market workspace">
-        <aside className="search-panel">
-          <div className="control-group">
-            <label htmlFor="player-search">Player</label>
-            <input
-              id="player-search"
-              type="search"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              placeholder="Search names"
-            />
-          </div>
+      <Box
+        component="section"
+        aria-label="Market workspace"
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "370px minmax(0, 1fr)" },
+          gap: 2.5,
+        }}
+      >
+        <SearchPanel
+          listings={listings}
+          listingError={listingError}
+          listingState={listingState}
+          rarity={rarity}
+          searchText={searchText}
+          selectedUuid={selectedUuid}
+          setRarity={setRarity}
+          setSearchText={setSearchText}
+          setSelectedUuid={setSelectedUuid}
+          setSort={setSort}
+          sort={sort}
+        />
 
-          <div className="filter-row">
-            <div className="control-group">
-              <label htmlFor="rarity">Rarity</label>
-              <select
-                id="rarity"
-                value={rarity}
-                onChange={(event) => setRarity(event.target.value)}
-              >
-                {rarityOptions.map((option) => (
-                  <option key={option || "all"} value={option}>
-                    {option ? titleCase(option) : "All"}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="control-group">
-              <label htmlFor="sort">Sort</label>
-              <select
-                id="sort"
-                value={sort}
-                onChange={(event) => setSort(event.target.value as SortKey)}
-              >
-                <option value="best_sell_price">Buy now</option>
-                <option value="best_buy_price">Sell now</option>
-                <option value="rank">Overall</option>
-              </select>
-            </div>
-          </div>
-
-          {listingState === "error" ? (
-            <p className="error-text">{listingError}</p>
-          ) : null}
-
-          <div className="result-list" aria-label="Player listings">
-            {listingState === "loading" ? (
-              <p className="muted">Loading market cards...</p>
+        <Paper
+          component="section"
+          aria-label="Market analysis"
+          variant="outlined"
+          sx={{ minWidth: 0, p: { xs: 2, md: 2.25 } }}
+        >
+          <Stack spacing={2.25}>
+            {detailState === "error" ? (
+              <Alert severity="error">{detailError}</Alert>
             ) : null}
 
-            {listings.map((listing, index) => {
-              const uuid = listing.item?.uuid;
-              const active = uuid === selectedUuid;
-
-              return (
-                <button
-                  className={`result-item ${active ? "active" : ""}`}
-                  key={uuid ?? `${listing.listing_name ?? "listing"}-${index}`}
-                  type="button"
-                  onClick={() => uuid && setSelectedUuid(uuid)}
-                  disabled={!uuid}
-                >
-                  <img
-                    src={listing.item?.baked_img ?? listing.item?.img ?? ""}
-                    alt=""
-                    loading="lazy"
-                  />
-                  <span>
-                    <strong>{listing.listing_name ?? listing.item?.name}</strong>
-                    <small>
-                      {listing.item?.team_short_name ?? listing.item?.team ?? "FA"} -{" "}
-                      {listing.item?.rarity ?? "Unknown"} - {listing.item?.ovr ?? "?"}
-                    </small>
-                  </span>
-                  <em>{formatStubs(toNumber(listing.best_sell_price))}</em>
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-
-        <section className="analysis-panel" aria-label="Market analysis">
-          {detailState === "error" ? (
-            <p className="error-text">{detailError}</p>
-          ) : null}
-
-          <div className="player-summary">
-            <div className="player-title">
-              {selectedListing?.item?.baked_img_lg ||
-              selectedListing?.item?.baked_img ||
-              selectedListing?.item?.img ? (
-                <img
-                  src={
-                    selectedListing.item.baked_img_lg ??
-                    selectedListing.item.baked_img ??
-                    selectedListing.item.img ??
-                    ""
-                  }
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              sx={{ alignItems: { xs: "flex-start", sm: "center" } }}
+            >
+              {cardImage ? (
+                <Box
+                  component="img"
                   alt=""
+                  src={cardImage}
+                  sx={{
+                    width: { xs: 72, sm: 96 },
+                    height: { xs: 72, sm: 96 },
+                    flex: "0 0 auto",
+                    objectFit: "contain",
+                  }}
                 />
               ) : null}
-              <div>
-                <p className="eyebrow">
+
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  color="primary"
+                  fontSize={12}
+                  fontWeight={800}
+                  letterSpacing="0.08em"
+                  textTransform="uppercase"
+                >
                   {selectedListing?.item?.team_short_name ??
                     selectedListing?.item?.team ??
                     "Market"}
-                </p>
-                <h2>{selectedName}</h2>
-                <p className="muted">
+                </Typography>
+                <Typography component="h2" variant="h4" fontWeight={800}>
+                  {selectedName}
+                </Typography>
+                <Typography color="text.secondary">
                   {selectedListing?.item?.rarity ?? "Unknown rarity"} -{" "}
                   {selectedListing?.item?.series ?? "Unknown series"} -{" "}
                   {selectedListing?.item?.display_position ?? "Position"}
-                </p>
-              </div>
-            </div>
-            <div className="detail-state">
-              {detailState === "loading" ? "Refreshing..." : "Live API"}
-            </div>
-          </div>
+                </Typography>
+              </Box>
 
-          <div className="metric-grid">
-            <Metric label="Buy now" value={formatStubs(bestSell)} />
-            <Metric label="Sell now" value={formatStubs(bestBuy)} />
-            <Metric label="Spread" value={formatStubs(currentSpread)} />
-            <Metric label="Average order" value={formatStubs(averageOrderPrice)} />
-            <Metric label="Daily history starts" value={earliestDaily} />
-            <Metric label="Granular orders start" value={earliestOrder} />
-          </div>
+              <Chip
+                color={detailState === "loading" ? "default" : "primary"}
+                label={detailState === "loading" ? "Refreshing..." : "Live API"}
+                variant="outlined"
+              />
+            </Stack>
 
-          <div className="chart-grid">
-            <section className="chart-section">
-              <div className="section-heading">
-                <h3>Daily price history</h3>
-                <span>{priceHistory.length} points</span>
-              </div>
-              <PriceChart points={priceHistory} />
-            </section>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  xl: "repeat(6, minmax(0, 1fr))",
+                },
+                gap: 1.25,
+              }}
+            >
+              <Metric label="Buy now" value={formatStubs(bestSell)} />
+              <Metric label="Sell now" value={formatStubs(bestBuy)} />
+              <Metric label="Spread" value={formatStubs(currentSpread)} />
+              <Metric
+                label="Average order"
+                value={formatStubs(averageOrderPrice)}
+              />
+              <Metric label="Daily history starts" value={earliestDaily} />
+              <Metric label="Granular orders start" value={earliestOrder} />
+            </Box>
 
-            <section className="chart-section">
-              <div className="section-heading">
-                <h3>Completed orders by hour</h3>
-                <span>{completedOrders.length} orders</span>
-              </div>
-              <OrderChart buckets={orderBuckets} />
-            </section>
-          </div>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" },
+                gap: 1.75,
+              }}
+            >
+              <ChartCard title="Daily price history" meta={`${priceHistory.length} points`}>
+                <PriceChart points={priceHistory} />
+              </ChartCard>
 
-          <section className="orders-section">
-            <div className="section-heading">
-              <h3>Recent completed orders</h3>
-              <span>{earliestOrder} to {latestOrder}</span>
-            </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {completedOrders
-                    .slice()
-                    .reverse()
-                    .slice(0, 40)
-                    .map((order, index) => (
-                      <tr key={`${order.label}-${order.price}-${index}`}>
-                        <td>{order.label}</td>
-                        <td>{formatStubs(order.price)}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </section>
-      </section>
-    </main>
+              <ChartCard
+                title="Completed orders by hour"
+                meta={`${completedOrders.length} orders`}
+              >
+                <OrderChart buckets={orderBuckets} />
+              </ChartCard>
+            </Box>
+
+            <Paper variant="outlined" sx={{ p: 1.75 }}>
+              <SectionHeading
+                title="Recent completed orders"
+                meta={`${earliestOrder} to ${latestOrder}`}
+              />
+              <TableContainer sx={{ maxHeight: 360 }}>
+                <Table stickyHeader size="small" aria-label="Recent completed orders">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Time</TableCell>
+                      <TableCell align="right">Price</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {completedOrders
+                      .slice()
+                      .reverse()
+                      .slice(0, 40)
+                      .map((order, index) => (
+                        <TableRow key={`${order.label}-${order.price}-${index}`}>
+                          <TableCell>{order.label}</TableCell>
+                          <TableCell align="right">
+                            {formatStubs(order.price)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Stack>
+        </Paper>
+      </Box>
+    </Container>
+  );
+}
+
+function SearchPanel({
+  listings,
+  listingError,
+  listingState,
+  rarity,
+  searchText,
+  selectedUuid,
+  setRarity,
+  setSearchText,
+  setSelectedUuid,
+  setSort,
+  sort,
+}: {
+  listings: Listing[];
+  listingError: string;
+  listingState: LoadState;
+  rarity: string;
+  searchText: string;
+  selectedUuid: string | null;
+  setRarity: (value: string) => void;
+  setSearchText: (value: string) => void;
+  setSelectedUuid: (value: string) => void;
+  setSort: (value: SortKey) => void;
+  sort: SortKey;
+}) {
+  return (
+    <Paper
+      component="aside"
+      variant="outlined"
+      sx={{ alignSelf: "start", p: 2, position: { lg: "sticky" }, top: 16 }}
+    >
+      <Stack spacing={1.5}>
+        <TextField
+          fullWidth
+          label="Player"
+          onChange={(event) => setSearchText(event.target.value)}
+          placeholder="Search names"
+          type="search"
+          value={searchText}
+        />
+
+        <Stack direction={{ xs: "column", sm: "row", lg: "row" }} spacing={1.5}>
+          <FormControl fullWidth>
+            <InputLabel id="rarity-label">Rarity</InputLabel>
+            <Select
+              label="Rarity"
+              labelId="rarity-label"
+              onChange={(event: SelectChangeEvent) => setRarity(event.target.value)}
+              value={rarity}
+            >
+              {rarityOptions.map((option) => (
+                <MenuItem key={option || "all"} value={option}>
+                  {option ? titleCase(option) : "All"}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth>
+            <InputLabel id="sort-label">Sort</InputLabel>
+            <Select
+              label="Sort"
+              labelId="sort-label"
+              onChange={(event: SelectChangeEvent) =>
+                setSort(event.target.value as SortKey)
+              }
+              value={sort}
+            >
+              <MenuItem value="best_sell_price">Buy now</MenuItem>
+              <MenuItem value="best_buy_price">Sell now</MenuItem>
+              <MenuItem value="rank">Overall</MenuItem>
+            </Select>
+          </FormControl>
+        </Stack>
+
+        {listingState === "error" ? (
+          <Alert severity="error">{listingError}</Alert>
+        ) : null}
+
+        <Box sx={{ position: "relative" }}>
+          {listingState === "loading" ? (
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: "center", color: "text.secondary", mb: 1 }}
+            >
+              <CircularProgress size={16} />
+              <Typography variant="body2">Loading market cards...</Typography>
+            </Stack>
+          ) : null}
+
+          <List
+            aria-label="Player listings"
+            disablePadding
+            sx={{
+              display: "grid",
+              gap: 1,
+              maxHeight: { xs: 440, lg: "calc(100vh - 250px)" },
+              overflow: "auto",
+              pr: 0.5,
+            }}
+          >
+            {listings.map((listing, index) => {
+              const uuid = listing.item?.uuid;
+              const active = uuid === selectedUuid;
+              const image = listing.item?.baked_img ?? listing.item?.img ?? undefined;
+
+              return (
+                <ListItemButton
+                  disabled={!uuid}
+                  key={uuid ?? `${listing.listing_name ?? "listing"}-${index}`}
+                  onClick={() => uuid && setSelectedUuid(uuid)}
+                  selected={active}
+                  sx={{
+                    border: 1,
+                    borderColor: active ? "primary.main" : "divider",
+                    borderRadius: 1,
+                    gap: 1,
+                  }}
+                >
+                  <ListItemAvatar sx={{ minWidth: 48 }}>
+                    <Avatar
+                      src={image}
+                      variant="square"
+                      sx={{ bgcolor: "background.default", objectFit: "contain" }}
+                    >
+                      {listing.listing_name?.charAt(0) ?? "?"}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={listing.listing_name ?? listing.item?.name}
+                    primaryTypographyProps={{ fontWeight: 800, noWrap: true }}
+                    secondary={`${listing.item?.team_short_name ?? listing.item?.team ?? "FA"} - ${
+                      listing.item?.rarity ?? "Unknown"
+                    } - ${listing.item?.ovr ?? "?"}`}
+                    secondaryTypographyProps={{ noWrap: true }}
+                  />
+                  <Typography color="secondary" fontWeight={900}>
+                    {formatStubs(toNumber(listing.best_sell_price))}
+                  </Typography>
+                </ListItemButton>
+              );
+            })}
+          </List>
+        </Box>
+      </Stack>
+    </Paper>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
+    <Paper variant="outlined" sx={{ minWidth: 0, p: 1.5 }}>
+      <Typography color="text.secondary" variant="caption">
+        {label}
+      </Typography>
+      <Typography fontWeight={900} sx={{ overflowWrap: "anywhere" }} variant="h6">
+        {value}
+      </Typography>
+    </Paper>
+  );
+}
+
+function ChartCard({
+  children,
+  meta,
+  title,
+}: {
+  children: React.ReactNode;
+  meta: string;
+  title: string;
+}) {
+  return (
+    <Paper variant="outlined" sx={{ minWidth: 0, p: 1.75 }}>
+      <SectionHeading title={title} meta={meta} />
+      {children}
+    </Paper>
+  );
+}
+
+function SectionHeading({ meta, title }: { meta: string; title: string }) {
+  return (
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      spacing={1}
+      sx={{ alignItems: { xs: "flex-start", sm: "baseline" }, mb: 1.5 }}
+    >
+      <Typography component="h3" fontWeight={900} sx={{ flex: 1 }} variant="h6">
+        {title}
+      </Typography>
+      <Typography color="text.secondary" variant="body2">
+        {meta}
+      </Typography>
+    </Stack>
   );
 }
 
 function PriceChart({ points }: { points: PricePoint[] }) {
   if (points.length === 0) {
-    return <p className="empty-chart">No daily prices returned.</p>;
+    return <Typography color="text.secondary">No daily prices returned.</Typography>;
   }
 
   return (
@@ -380,7 +592,9 @@ function PriceChart({ points }: { points: PricePoint[] }) {
 
 function OrderChart({ buckets }: { buckets: OrderBucket[] }) {
   if (buckets.length === 0) {
-    return <p className="empty-chart">No completed orders returned.</p>;
+    return (
+      <Typography color="text.secondary">No completed orders returned.</Typography>
+    );
   }
 
   return (
@@ -416,7 +630,7 @@ function LineChart({
     .filter((value): value is number => value !== null);
   const allValues = [...primaryValues, ...secondaryValues];
   if (allValues.length === 0) {
-    return <p className="empty-chart">No prices returned.</p>;
+    return <Typography color="text.secondary">No prices returned.</Typography>;
   }
 
   const min = Math.min(...allValues);
@@ -446,35 +660,81 @@ function LineChart({
   };
 
   return (
-    <div>
-      <svg
-        className="line-chart"
-        viewBox={`0 0 ${width} ${height}`}
+    <Box>
+      <Box
+        component="svg"
         role="img"
         aria-label={`${primaryLabel} and ${secondaryLabel} trend`}
+        viewBox={`0 0 ${width} ${height}`}
+        sx={{ display: "block", height: "auto", overflow: "visible", width: "100%" }}
       >
-        <line x1={padding} x2={width - padding} y1={height - padding} y2={height - padding} />
-        <line x1={padding} x2={padding} y1={padding} y2={height - padding} />
-        <path className="primary-line" d={pathFor("primary")} />
-        <path className="secondary-line" d={pathFor("secondary")} />
+        <line
+          x1={padding}
+          x2={width - padding}
+          y1={height - padding}
+          y2={height - padding}
+          stroke="rgba(255,255,255,0.2)"
+        />
+        <line
+          x1={padding}
+          x2={padding}
+          y1={padding}
+          y2={height - padding}
+          stroke="rgba(255,255,255,0.2)"
+        />
+        <path
+          d={pathFor("primary")}
+          fill="none"
+          stroke="#7dd3a7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3"
+        />
+        <path
+          d={pathFor("secondary")}
+          fill="none"
+          stroke="#f7c873"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3"
+        />
         {points.map((point, index) => {
           if (point.primary === null) return null;
           return (
             <circle
-              className="primary-dot"
               cx={xFor(index)}
               cy={yFor(point.primary)}
+              fill="#7dd3a7"
               key={`${point.label}-primary`}
               r="3"
             />
           );
         })}
-      </svg>
-      <div className="legend">
-        <span><i className="primary-swatch" />{primaryLabel}</span>
-        <span><i className="secondary-swatch" />{secondaryLabel}</span>
-      </div>
-    </div>
+      </Box>
+
+      <Stack direction="row" spacing={1.75} sx={{ mt: 1 }}>
+        <LegendItem color="#7dd3a7" label={primaryLabel} />
+        <LegendItem color="#f7c873" label={secondaryLabel} />
+      </Stack>
+    </Box>
+  );
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
+      <Box
+        sx={{
+          bgcolor: color,
+          borderRadius: "50%",
+          height: 12,
+          width: 12,
+        }}
+      />
+      <Typography color="text.secondary" variant="body2">
+        {label}
+      </Typography>
+    </Stack>
   );
 }
 
@@ -611,7 +871,7 @@ function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function sortOrderFor(sort: SortKey) {
+function sortOrderFor(sort: SortKey): "asc" | "desc" {
   if (sort === "best_sell_price") return "asc";
   return "desc";
 }
