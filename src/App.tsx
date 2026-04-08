@@ -35,6 +35,7 @@ import {
   type ApiSortKey,
   fetchStoredCompletedOrders,
   type CompletedOrder,
+  MARKET_ITEM_TYPES,
   type Listing,
   type ListingPriceHistoryPoint,
   type SortOrder,
@@ -281,7 +282,7 @@ export default function App() {
     selectedListing?.item?.name ??
     listings.find((listing) => listing.item?.uuid === selectedUuid)
       ?.listing_name ??
-    "Select a player";
+    "Select an item";
   const bestBuy = toNumber(selectedListing?.best_buy_price);
   const bestSell = toNumber(selectedListing?.best_sell_price);
   const earliestDaily = priceHistory[0]?.label ?? "Not returned";
@@ -335,7 +336,7 @@ export default function App() {
             MLB The Show 26 Market
           </Typography>
           <Typography component="h1" variant="h4" fontWeight={800}>
-            Live card market
+            Live market
           </Typography>
         </Box>
       </Stack>
@@ -402,17 +403,13 @@ export default function App() {
                   letterSpacing="0.08em"
                   textTransform="uppercase"
                 >
-                  {selectedListing?.item?.team_short_name ??
-                    selectedListing?.item?.team ??
-                    "Market"}
+                  {getListingEyebrow(selectedListing)}
                 </Typography>
                 <Typography component="h2" variant="h4" fontWeight={800}>
                   {selectedName}
                 </Typography>
                 <Typography color="text.secondary">
-                  {selectedListing?.item?.rarity ?? "Unknown rarity"} -{" "}
-                  {selectedListing?.item?.series ?? "Unknown series"} -{" "}
-                  {selectedListing?.item?.display_position ?? "Position"}
+                  {getListingDetailSummary(selectedListing)}
                 </Typography>
               </Box>
 
@@ -555,9 +552,9 @@ function SearchPanel({
       <Stack spacing={1.5}>
         <TextField
           fullWidth
-          label="Player"
+          label="Item"
           onChange={(event) => setSearchText(event.target.value)}
-          placeholder="Search names"
+          placeholder="Search market items"
           type="search"
           value={searchText}
         />
@@ -617,7 +614,7 @@ function SearchPanel({
 
         {isSpreadSort(sort) ? (
           <Alert severity="info" sx={{ py: 0.5 }}>
-            Spread and profit sorts hide cards with Sell now at 0
+            Spread and profit sorts hide items with Sell now at 0
             {sort === "spread_percentage"
               ? ` and spreads below ${formatStubs(minSpreadForPercent)}.`
               : "."}
@@ -630,7 +627,7 @@ function SearchPanel({
 
         <Box sx={{ position: "relative" }}>
           <List
-            aria-label="Player listings"
+            aria-label="Market listings"
             disablePadding
             sx={{
               display: "grid",
@@ -675,9 +672,7 @@ function SearchPanel({
                   <ListItemText
                     primary={listing.listing_name ?? listing.item?.name}
                     primaryTypographyProps={{ fontWeight: 800, noWrap: true }}
-                    secondary={`${listing.item?.team_short_name ?? listing.item?.team ?? "FA"} - ${
-                      listing.item?.rarity ?? "Unknown"
-                    } - ${listing.item?.ovr ?? "?"}`}
+                    secondary={getListingListSummary(listing)}
                     secondaryTypographyProps={{ noWrap: true }}
                   />
                   <Box sx={{ flex: "0 0 auto", textAlign: "right" }}>
@@ -1352,6 +1347,53 @@ function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function getListingTypeLabel(listing: Listing | null | undefined): string {
+  const type = listing?.item?.type;
+  if (!type) return "Item";
+  if (type === "mlb_card") return "MLB Card";
+  return type
+    .split("_")
+    .map((part) => titleCase(part))
+    .join(" ");
+}
+
+function getListingEyebrow(listing: Listing | null | undefined): string {
+  return (
+    listing?.item?.team_short_name ??
+    listing?.item?.team ??
+    listing?.item?.series ??
+    getListingTypeLabel(listing)
+  );
+}
+
+function getListingListSummary(listing: Listing): string {
+  const parts = [
+    listing.item?.team_short_name ?? listing.item?.team ?? null,
+    listing.item?.rarity ?? null,
+    listing.item?.ovr ? `OVR ${listing.item.ovr}` : null,
+    listing.item?.display_position ?? null,
+    !listing.item?.team && !listing.item?.ovr && !listing.item?.display_position
+      ? getListingTypeLabel(listing)
+      : null,
+  ].filter((part): part is string => Boolean(part));
+
+  return parts.join(" - ") || getListingTypeLabel(listing);
+}
+
+function getListingDetailSummary(listing: Listing | null | undefined): string {
+  const parts = [
+    listing?.item?.rarity ?? null,
+    listing?.item?.series ?? null,
+    listing?.item?.display_position ?? null,
+    listing?.item?.set_name ?? null,
+    !listing?.item?.series && !listing?.item?.display_position
+      ? getListingTypeLabel(listing)
+      : null,
+  ].filter((part): part is string => Boolean(part));
+
+  return parts.join(" - ") || "Market item";
+}
+
 function readFiltersFromUrl(): FilterState {
   if (typeof window === "undefined") {
     return defaultFilters();
@@ -1480,18 +1522,65 @@ async function fetchSortedListings({
           ),
           sort,
         )
-      : searchedListings;
+      : sortListingsByStandardMetric(searchedListings, sort);
   }
 
-  const firstResponse = await fetchListings({
-    page: 1,
-    name,
-    rarity,
-    sort: apiSort,
-    order,
-  });
+  return sortListingsByStandardMetric(
+    await fetchAllListings({
+      order,
+      rarity,
+      sort: apiSort,
+    }),
+    sort,
+  );
+}
 
-  return firstResponse.listings ?? [];
+function sortListingsByStandardMetric(
+  listings: Listing[],
+  sort: Exclude<
+    SortKey,
+    "spread_number" | "spread_percentage" | "profit" | "profit_percentage"
+  >,
+): Listing[] {
+  const direction = sortOrderFor(sort) === "asc" ? 1 : -1;
+
+  return listings.slice().sort((a, b) => {
+    const aValue = listingStandardSortValue(a, sort);
+    const bValue = listingStandardSortValue(b, sort);
+
+    if (aValue === null && bValue === null) return compareListingNames(a, b);
+    if (aValue === null) return 1;
+    if (bValue === null) return -1;
+    if (aValue !== bValue) {
+      return (aValue - bValue) * direction;
+    }
+
+    return compareListingNames(a, b);
+  });
+}
+
+function compareListingNames(a: Listing, b: Listing): number {
+  return (a.listing_name ?? a.item?.name ?? "").localeCompare(
+    b.listing_name ?? b.item?.name ?? "",
+  );
+}
+
+function listingStandardSortValue(
+  listing: Listing,
+  sort: Exclude<
+    SortKey,
+    "spread_number" | "spread_percentage" | "profit" | "profit_percentage"
+  >,
+): number | null {
+  if (sort === "best_sell_price") {
+    return getListingPrices(listing).buyNow;
+  }
+
+  if (sort === "best_buy_price") {
+    return getListingPrices(listing).sellNow;
+  }
+
+  return toNumber(listing.item?.["new_rank"] ?? listing.item?.ovr);
 }
 
 async function fetchAllListings({
@@ -1537,11 +1626,32 @@ async function fetchAllListingsUncached({
   rarity?: string;
   sort: ApiSortKey;
 }): Promise<Listing[]> {
+  const allListings = await mapWithConcurrency(
+    MARKET_ITEM_TYPES,
+    MARKET_ITEM_TYPES.length,
+    async (type) => fetchAllListingsForType({ order, rarity, sort, type }),
+  );
+
+  return allListings.flat();
+}
+
+async function fetchAllListingsForType({
+  order,
+  rarity,
+  sort,
+  type,
+}: {
+  order: SortOrder;
+  rarity?: string;
+  sort: ApiSortKey;
+  type: (typeof MARKET_ITEM_TYPES)[number];
+}): Promise<Listing[]> {
   const firstResponse = await fetchListings({
     page: 1,
     rarity,
     sort,
     order,
+    type,
   });
 
   if (firstResponse.total_pages <= 1) {
@@ -1562,6 +1672,7 @@ async function fetchAllListingsUncached({
         rarity,
         sort,
         order,
+        type,
       });
 
       return response.listings ?? [];

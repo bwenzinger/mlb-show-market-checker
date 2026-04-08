@@ -8,7 +8,12 @@ import express, {
   type Response,
 } from "express";
 
-import type { CompletedOrder, Listing, ListingsResponse } from "../showApi";
+import type {
+  CompletedOrder,
+  ItemType,
+  Listing,
+  ListingsResponse,
+} from "../showApi";
 
 interface CollectorConfig {
   allowedOrigins: string[];
@@ -45,6 +50,13 @@ interface NormalizedOrder {
 }
 
 type SqlParams = Record<string, string | number | null>;
+const MARKET_ITEM_TYPES: ItemType[] = [
+  "mlb_card",
+  "stadium",
+  "equipment",
+  "sponsorship",
+  "unlockable",
+];
 
 if (fs.existsSync(".env")) {
   process.loadEnvFile(".env");
@@ -394,7 +406,7 @@ async function runCollection({ limit }: CollectionOptions): Promise<CollectionSt
       }
     });
 
-    console.log(`Fetching completed orders for ${selectedListings.length} card(s)...`);
+    console.log(`Fetching completed orders for ${selectedListings.length} listing(s)...`);
 
     await mapConcurrent(selectedListings, config.concurrency, async (listing) => {
       const uuid = listing.item?.uuid;
@@ -439,13 +451,40 @@ async function runCollection({ limit }: CollectionOptions): Promise<CollectionSt
 }
 
 async function fetchAllMarketListings(limit: number | null): Promise<Listing[]> {
+  if (limit !== null) {
+    const listings: Listing[] = [];
+
+    for (const type of MARKET_ITEM_TYPES) {
+      const typeListings = await fetchAllMarketListingsForType(type, limit);
+      listings.push(...typeListings);
+      if (listings.length >= limit) {
+        break;
+      }
+    }
+
+    return listings.slice(0, limit);
+  }
+
+  const listingsByType = await mapConcurrentResults(
+    MARKET_ITEM_TYPES,
+    MARKET_ITEM_TYPES.length,
+    async (type) => fetchAllMarketListingsForType(type, null),
+  );
+
+  return listingsByType.flat();
+}
+
+async function fetchAllMarketListingsForType(
+  type: ItemType,
+  limit: number | null,
+): Promise<Listing[]> {
   const listings: Listing[] = [];
   let page = 1;
   let totalPages = 1;
 
   do {
     const response = await requestJson<ListingsResponse>("/listings.json", {
-      type: "mlb_card",
+      type,
       page,
       sort: "rank",
       order: "desc",
@@ -453,14 +492,14 @@ async function fetchAllMarketListings(limit: number | null): Promise<Listing[]> 
 
     listings.push(...(response.listings ?? []));
     totalPages = Number(response.total_pages ?? page);
-    console.log(`Listings page ${page}/${totalPages}`);
+    console.log(`[${type}] listings page ${page}/${totalPages}`);
     if (limit !== null && listings.length >= limit) {
       break;
     }
     page += 1;
   } while (page <= totalPages);
 
-  return listings;
+  return limit === null ? listings : listings.slice(0, limit);
 }
 
 async function fetchListingByUuid(uuid: string): Promise<Listing> {
@@ -593,6 +632,29 @@ async function mapConcurrent<T>(
   await Promise.all(
     Array.from({ length: Math.min(concurrency, items.length) }, runWorker),
   );
+}
+
+async function mapConcurrentResults<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(items[index]);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, runWorker),
+  );
+
+  return results;
 }
 
 function withTransaction<T>(fn: () => T): T {

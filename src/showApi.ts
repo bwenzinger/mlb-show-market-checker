@@ -5,6 +5,14 @@ export type ItemType =
   | "sponsorship"
   | "unlockable";
 
+export const MARKET_ITEM_TYPES: ItemType[] = [
+  "mlb_card",
+  "stadium",
+  "equipment",
+  "sponsorship",
+  "unlockable",
+];
+
 export type ApiSortKey = "rank" | "best_sell_price" | "best_buy_price";
 export type SortKey =
   | ApiSortKey
@@ -84,15 +92,17 @@ export async function fetchListings({
   rarity,
   sort = "rank",
   order = "desc",
+  type = "mlb_card",
 }: {
   page?: number;
   name?: string;
   rarity?: string;
   sort?: ApiSortKey;
   order?: SortOrder;
+  type?: ItemType;
 } = {}): Promise<ListingsResponse> {
   return requestJson<ListingsResponse>("/listings.json", {
-    type: "mlb_card",
+    type,
     page,
     name,
     rarity,
