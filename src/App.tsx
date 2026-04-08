@@ -115,10 +115,10 @@ export default function App() {
     writeFiltersToUrl({
       minSpreadForPercent,
       rarity,
-      searchText,
+      searchText: query,
       sort,
     });
-  }, [minSpreadForPercent, rarity, searchText, sort]);
+  }, [minSpreadForPercent, query, rarity, sort]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
