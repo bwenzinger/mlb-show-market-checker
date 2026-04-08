@@ -15,6 +15,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Slider,
   Stack,
   Table,
   TableBody,
@@ -80,6 +81,9 @@ const sortOptions: Array<{ label: string; value: SortKey }> = [
 ];
 const LISTING_CACHE_MS = 60_000;
 const SALE_TAX_RATE = 0.1;
+const RECENT_ORDER_LOOKBACK_DAYS = 7;
+const ALL_ORDER_LOOKBACK_DAYS = 3650;
+const DEFAULT_TIMELINE_WINDOW_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
 const DEFAULT_SORT: SortKey = "spread_percentage";
 const fullListingsCache = new Map<
@@ -102,6 +106,9 @@ export default function App() {
   const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [storedCompletedOrders, setStoredCompletedOrders] = useState<
+    CompletedOrder[] | null
+  >(null);
+  const [storedAllCompletedOrders, setStoredAllCompletedOrders] = useState<
     CompletedOrder[] | null
   >(null);
   const [detailState, setDetailState] = useState<LoadState>("idle");
@@ -205,21 +212,33 @@ export default function App() {
   useEffect(() => {
     if (!selectedUuid) {
       setStoredCompletedOrders(null);
+      setStoredAllCompletedOrders(null);
       return;
     }
 
     let active = true;
     const uuid = selectedUuid;
     setStoredCompletedOrders(null);
+    setStoredAllCompletedOrders(null);
 
     async function loadStoredOrders() {
       try {
-        const orders = await fetchStoredCompletedOrders({ days: 7, uuid });
+        const [recentOrders, allOrders] = await Promise.all([
+          fetchStoredCompletedOrders({
+            days: RECENT_ORDER_LOOKBACK_DAYS,
+            uuid,
+          }),
+          fetchStoredCompletedOrders({ days: ALL_ORDER_LOOKBACK_DAYS, uuid }),
+        ]);
         if (!active) return;
-        setStoredCompletedOrders(orders.length > 0 ? orders : null);
+        setStoredCompletedOrders(
+          recentOrders.length > 0 ? recentOrders : null,
+        );
+        setStoredAllCompletedOrders(allOrders.length > 0 ? allOrders : null);
       } catch {
         if (!active) return;
         setStoredCompletedOrders(null);
+        setStoredAllCompletedOrders(null);
       }
     }
 
@@ -240,8 +259,17 @@ export default function App() {
         storedCompletedOrders?.length
           ? storedCompletedOrders
           : (selectedListing?.completed_orders ?? []),
-      ),
+    ),
     [selectedListing, storedCompletedOrders],
+  );
+  const allCompletedOrders = useMemo(
+    () =>
+      normalizeOrders(
+        storedAllCompletedOrders?.length
+          ? storedAllCompletedOrders
+          : (selectedListing?.completed_orders ?? []),
+      ),
+    [selectedListing, storedAllCompletedOrders],
   );
   const orderBuckets = useMemo(
     () => bucketOrdersByHour(completedOrders),
@@ -260,6 +288,9 @@ export default function App() {
   const earliestOrder = completedOrders[0]?.label ?? "Not returned";
   const latestOrder =
     completedOrders[completedOrders.length - 1]?.label ?? "Not returned";
+  const earliestAllOrder = allCompletedOrders[0]?.label ?? "Not returned";
+  const latestAllOrder =
+    allCompletedOrders[allCompletedOrders.length - 1]?.label ?? "Not returned";
   const currentSpread =
     bestBuy !== null && bestSell !== null
       ? Math.max(bestSell - bestBuy, 0)
@@ -276,6 +307,9 @@ export default function App() {
     completedOrders.map((order) => order.price),
   );
   const completedOrdersSource = storedCompletedOrders?.length
+    ? "Local database"
+    : "Live API sample";
+  const allCompletedOrdersSource = storedAllCompletedOrders?.length
     ? "Local database"
     : "Live API sample";
   const cardImage =
@@ -469,6 +503,13 @@ export default function App() {
                 </Table>
               </TableContainer>
             </Paper>
+
+            <ChartCard
+              title="Every completed order"
+              meta={`${allCompletedOrders.length} orders - ${allCompletedOrdersSource}: ${earliestAllOrder} to ${latestAllOrder}`}
+            >
+              <CompletedOrderTimelineChart orders={allCompletedOrders} />
+            </ChartCard>
           </Stack>
         </Paper>
       </Box>
@@ -803,18 +844,103 @@ function OrderChart({ buckets }: { buckets: OrderBucket[] }) {
   );
 }
 
+function CompletedOrderTimelineChart({ orders }: { orders: OrderPoint[] }) {
+  const [visibleRange, setVisibleRange] = useState<[number, number] | null>(
+    null,
+  );
+  const minTime = orders[0]?.date.getTime() ?? 0;
+  const maxTime = orders[orders.length - 1]?.date.getTime() ?? 0;
+
+  useEffect(() => {
+    if (orders.length === 0) {
+      setVisibleRange(null);
+      return;
+    }
+
+    setVisibleRange([
+      Math.max(minTime, maxTime - DEFAULT_TIMELINE_WINDOW_MS),
+      maxTime,
+    ]);
+  }, [maxTime, minTime, orders.length]);
+
+  const visibleOrders = useMemo(() => {
+    if (!visibleRange) return orders;
+
+    return orders.filter((order) => {
+      const time = order.date.getTime();
+      return time >= visibleRange[0] && time <= visibleRange[1];
+    });
+  }, [orders, visibleRange]);
+
+  if (orders.length === 0) {
+    return (
+      <Typography color="text.secondary">
+        No completed orders returned.
+      </Typography>
+    );
+  }
+
+  return (
+    <Stack spacing={1.5}>
+      {visibleRange && maxTime > minTime ? (
+        <Box sx={{ px: 1 }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            sx={{ alignItems: { xs: "flex-start", sm: "baseline" }, mb: 0.5 }}
+          >
+            <Typography color="text.secondary" variant="body2">
+              Showing {visibleOrders.length.toLocaleString("en-US")} of{" "}
+              {orders.length.toLocaleString("en-US")} orders
+            </Typography>
+            <Typography color="text.secondary" variant="caption">
+              {formatDateTime(new Date(visibleRange[0]))} to{" "}
+              {formatDateTime(new Date(visibleRange[1]))}
+            </Typography>
+          </Stack>
+          <Slider
+            disableSwap
+            max={maxTime}
+            min={minTime}
+            onChange={(_, value) => {
+              if (Array.isArray(value)) {
+                setVisibleRange([value[0], value[1]]);
+              }
+            }}
+            step={60 * 1000}
+            value={visibleRange}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(value) => formatDateTime(new Date(value))}
+          />
+        </Box>
+      ) : null}
+
+      <LineChart
+        pointRadius={1.75}
+        points={visibleOrders.map((order) => ({
+          label: order.label,
+          primary: order.price,
+        }))}
+        primaryLabel="Sale price"
+      />
+    </Stack>
+  );
+}
+
 function LineChart({
+  pointRadius = 3.5,
   points,
   primaryLabel,
   secondaryLabel,
 }: {
+  pointRadius?: number;
   points: Array<{
     label: string;
     primary: number | null;
-    secondary: number | null;
+    secondary?: number | null;
   }>;
   primaryLabel: string;
-  secondaryLabel: string;
+  secondaryLabel?: string;
 }) {
   const width = 720;
   const height = 260;
@@ -822,9 +948,11 @@ function LineChart({
   const primaryValues = points
     .map((point) => point.primary)
     .filter((value): value is number => value !== null);
-  const secondaryValues = points
-    .map((point) => point.secondary)
-    .filter((value): value is number => value !== null);
+  const secondaryValues = secondaryLabel
+    ? points
+        .map((point) => point.secondary)
+        .filter((value): value is number => value !== null)
+    : [];
   const allValues = [...primaryValues, ...secondaryValues];
   if (allValues.length === 0) {
     return <Typography color="text.secondary">No prices returned.</Typography>;
@@ -845,7 +973,7 @@ function LineChart({
     return points
       .map((point, index) => {
         const value = point[key];
-        if (value === null) return null;
+        if (value === null || value === undefined) return null;
 
         const command = started ? "L" : "M";
         started = true;
@@ -861,7 +989,11 @@ function LineChart({
       <Box
         component="svg"
         role="img"
-        aria-label={`${primaryLabel} and ${secondaryLabel} trend`}
+        aria-label={
+          secondaryLabel
+            ? `${primaryLabel} and ${secondaryLabel} trend`
+            : `${primaryLabel} trend`
+        }
         viewBox={`0 0 ${width} ${height}`}
         sx={{
           display: "block",
@@ -892,14 +1024,16 @@ function LineChart({
           strokeLinejoin="round"
           strokeWidth="3"
         />
-        <path
-          d={pathFor("secondary")}
-          fill="none"
-          stroke="#f7c873"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="3"
-        />
+        {secondaryLabel ? (
+          <path
+            d={pathFor("secondary")}
+            fill="none"
+            stroke="#f7c873"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3"
+          />
+        ) : null}
         {points.map((point, index) => {
           const currentX = xFor(index);
           const leftX = index === 0 ? 0 : (xFor(index - 1) + currentX) / 2;
@@ -910,7 +1044,9 @@ function LineChart({
           const columnWidth = Math.max(rightX - leftX, 1);
           const primaryY = point.primary === null ? null : yFor(point.primary);
           const secondaryY =
-            point.secondary === null ? null : yFor(point.secondary);
+            secondaryLabel && point.secondary !== null && point.secondary !== undefined
+              ? yFor(point.secondary)
+              : null;
           if (primaryY === null && secondaryY === null) return null;
 
           return (
@@ -929,9 +1065,13 @@ function LineChart({
               }
             >
               <g
-                aria-label={`${point.label}: ${primaryLabel} ${formatStubs(
-                  point.primary,
-                )}, ${secondaryLabel} ${formatStubs(point.secondary)}`}
+                aria-label={formatChartPointAriaLabel({
+                  label: point.label,
+                  primaryLabel,
+                  primaryValue: point.primary,
+                  secondaryLabel,
+                  secondaryValue: point.secondary,
+                })}
                 role="img"
                 style={{ cursor: "crosshair", outline: "none" }}
                 tabIndex={0}
@@ -946,14 +1086,19 @@ function LineChart({
                   y={0}
                 />
                 {primaryY !== null ? (
-                  <circle cx={currentX} cy={primaryY} fill="#7dd3a7" r="3.5" />
+                  <circle
+                    cx={currentX}
+                    cy={primaryY}
+                    fill="#7dd3a7"
+                    r={pointRadius}
+                  />
                 ) : null}
                 {secondaryY !== null ? (
                   <circle
                     cx={currentX}
                     cy={secondaryY}
                     fill="#f7c873"
-                    r="3.5"
+                    r={pointRadius}
                   />
                 ) : null}
               </g>
@@ -964,7 +1109,9 @@ function LineChart({
 
       <Stack direction="row" spacing={1.75} sx={{ mt: 1 }}>
         <LegendItem color="#7dd3a7" label={primaryLabel} />
-        <LegendItem color="#f7c873" label={secondaryLabel} />
+        {secondaryLabel ? (
+          <LegendItem color="#f7c873" label={secondaryLabel} />
+        ) : null}
       </Stack>
     </Box>
   );
@@ -980,8 +1127,8 @@ function ChartTooltipContent({
   label: string;
   primaryLabel: string;
   primaryValue: number | null;
-  secondaryLabel: string;
-  secondaryValue: number | null;
+  secondaryLabel?: string;
+  secondaryValue?: number | null;
 }) {
   return (
     <Stack spacing={0.5}>
@@ -991,11 +1138,34 @@ function ChartTooltipContent({
       <Typography variant="caption">
         {primaryLabel}: {formatStubs(primaryValue)}
       </Typography>
-      <Typography variant="caption">
-        {secondaryLabel}: {formatStubs(secondaryValue)}
-      </Typography>
+      {secondaryLabel ? (
+        <Typography variant="caption">
+          {secondaryLabel}: {formatStubs(secondaryValue ?? null)}
+        </Typography>
+      ) : null}
     </Stack>
   );
+}
+
+function formatChartPointAriaLabel({
+  label,
+  primaryLabel,
+  primaryValue,
+  secondaryLabel,
+  secondaryValue,
+}: {
+  label: string;
+  primaryLabel: string;
+  primaryValue: number | null;
+  secondaryLabel?: string;
+  secondaryValue?: number | null;
+}): string {
+  const primaryText = `${primaryLabel} ${formatStubs(primaryValue)}`;
+  const secondaryText = secondaryLabel
+    ? `, ${secondaryLabel} ${formatStubs(secondaryValue ?? null)}`
+    : "";
+
+  return `${label}: ${primaryText}${secondaryText}`;
 }
 
 function LegendItem({ color, label }: { color: string; label: string }) {
