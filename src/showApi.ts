@@ -10,7 +10,8 @@ export type SortKey =
   | ApiSortKey
   | "spread_number"
   | "spread_percentage"
-  | "profit";
+  | "profit"
+  | "profit_percentage";
 export type SortOrder = "asc" | "desc";
 
 export interface ShowItem {

@@ -75,6 +75,7 @@ const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: "Spread", value: "spread_number" },
   { label: "Spread %", value: "spread_percentage" },
   { label: "Profit", value: "profit" },
+  { label: "Profit %", value: "profit_percentage" },
   { label: "Overall", value: "rank" },
 ];
 const LISTING_CACHE_MS = 60_000;
@@ -263,13 +264,13 @@ export default function App() {
     bestBuy !== null && bestSell !== null
       ? Math.max(bestSell - bestBuy, 0)
       : null;
-  const currentSpreadPercentage =
-    currentSpread !== null && bestSell !== null && bestSell > 0
-      ? (currentSpread / bestSell) * 100
-      : null;
   const currentProfit =
     bestBuy !== null && bestSell !== null
       ? calculateProfit({ buyNow: bestSell, sellNow: bestBuy })
+      : null;
+  const currentProfitPercentage =
+    bestBuy !== null && bestSell !== null
+      ? calculateProfitPercentage({ buyNow: bestSell, sellNow: bestBuy })
       : null;
   const averageOrderPrice = average(
     completedOrders.map((order) => order.price),
@@ -403,8 +404,7 @@ export default function App() {
               <Metric label="Sell now" value={formatStubs(bestBuy)} />
               <ProfitMetric
                 profit={currentProfit}
-                spread={currentSpread}
-                spreadPercentage={currentSpreadPercentage}
+                profitPercentage={currentProfitPercentage}
               />
               <Metric label="Spread" value={formatStubs(currentSpread)} />
               <Metric label="Daily history starts" value={earliestDaily} />
@@ -576,7 +576,7 @@ function SearchPanel({
 
         {isSpreadSort(sort) ? (
           <Alert severity="info" sx={{ py: 0.5 }}>
-            Spread sorts hide cards with Sell now at 0
+            Spread and profit sorts hide cards with Sell now at 0
             {sort === "spread_percentage"
               ? ` and spreads below ${formatStubs(minSpreadForPercent)}.`
               : "."}
@@ -676,12 +676,10 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function ProfitMetric({
   profit,
-  spread,
-  spreadPercentage,
+  profitPercentage,
 }: {
   profit: number | null;
-  spread: number | null;
-  spreadPercentage: number | null;
+  profitPercentage: number | null;
 }) {
   const profitColor =
     profit === null
@@ -711,6 +709,20 @@ function ProfitMetric({
       >
         {formatStubs(profit)}
       </Typography>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: "baseline",
+          flexWrap: "wrap",
+          mt: 0.75,
+          rowGap: 0.25,
+        }}
+      >
+        <Typography color={profitColor} fontWeight={900} variant="body2">
+          {formatPercent(profitPercentage)} profit
+        </Typography>
+      </Stack>
     </Paper>
   );
 }
@@ -1180,6 +1192,9 @@ function writeFiltersToUrl({
   url.searchParams.set("minSpread", String(Math.max(minSpreadForPercent, 0)));
   url.searchParams.delete("minProfit");
   url.searchParams.delete("min_profit");
+  url.searchParams.delete("minProfitPercent");
+  url.searchParams.delete("minProfitPercentage");
+  url.searchParams.delete("min_profit_percent");
 
   const nextUrl = `${url.pathname}${url.search}${url.hash}`;
   const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -1395,11 +1410,16 @@ function compactSearchText(value: string): string {
 
 function isSpreadSort(
   sort: SortKey,
-): sort is "spread_number" | "spread_percentage" | "profit" {
+): sort is
+  | "spread_number"
+  | "spread_percentage"
+  | "profit"
+  | "profit_percentage" {
   return (
     sort === "spread_number" ||
     sort === "spread_percentage" ||
-    sort === "profit"
+    sort === "profit" ||
+    sort === "profit_percentage"
   );
 }
 
@@ -1442,6 +1462,10 @@ function listingSpreadSortValue(
     return listingProfit(listing);
   }
 
+  if (sort === "profit_percentage") {
+    return listingProfitPercentage(listing);
+  }
+
   return sort === "spread_percentage"
     ? listingSpreadPercentage(listing)
     : listingSpreadNumber(listing);
@@ -1478,6 +1502,13 @@ function getListingSortMetric(
     };
   }
 
+  if (sort === "profit_percentage") {
+    return {
+      label: "Profit %",
+      value: formatPercent(listingProfitPercentage(listing)),
+    };
+  }
+
   return { label: "Buy now", value: formatStubs(prices.buyNow) };
 }
 
@@ -1506,6 +1537,10 @@ function listingProfit(listing: Listing): number | null {
   return calculateProfit(getListingPrices(listing));
 }
 
+function listingProfitPercentage(listing: Listing): number | null {
+  return calculateProfitPercentage(getListingPrices(listing));
+}
+
 function calculateProfit({
   buyNow,
   sellNow,
@@ -1516,6 +1551,18 @@ function calculateProfit({
   const spread = calculateSpread({ buyNow, sellNow });
   if (spread === null || buyNow === null) return null;
   return Math.floor(spread - buyNow * SALE_TAX_RATE);
+}
+
+function calculateProfitPercentage({
+  buyNow,
+  sellNow,
+}: {
+  buyNow: number | null;
+  sellNow: number | null;
+}): number | null {
+  const profit = calculateProfit({ buyNow, sellNow });
+  if (profit === null || sellNow === null || sellNow <= 0) return null;
+  return (profit / sellNow) * 100;
 }
 
 function calculateSpread({
