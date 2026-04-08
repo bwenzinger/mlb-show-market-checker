@@ -406,10 +406,7 @@ export default function App() {
                 spread={currentSpread}
                 spreadPercentage={currentSpreadPercentage}
               />
-              <Metric
-                label="Average order"
-                value={formatStubs(averageOrderPrice)}
-              />
+              <Metric label="Spread" value={formatStubs(currentSpread)} />
               <Metric label="Daily history starts" value={earliestDaily} />
               <Metric label="Granular orders start" value={earliestOrder} />
             </Box>
@@ -687,14 +684,17 @@ function ProfitMetric({
   spreadPercentage: number | null;
 }) {
   const profitColor =
-    profit === null ? "text.primary" : profit > 0 ? "success.main" : "error.main";
+    profit === null
+      ? "text.primary"
+      : profit > 0
+        ? "success.main"
+        : "error.main";
 
   return (
     <Paper
       variant="outlined"
       sx={{
-        borderColor:
-          profit !== null && profit > 0 ? "success.dark" : "divider",
+        borderColor: profit !== null && profit > 0 ? "success.dark" : "divider",
         minWidth: 0,
         p: 1.5,
       }}
@@ -711,23 +711,6 @@ function ProfitMetric({
       >
         {formatStubs(profit)}
       </Typography>
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{
-          alignItems: "baseline",
-          flexWrap: "wrap",
-          mt: 0.75,
-          rowGap: 0.25,
-        }}
-      >
-        <Typography color="text.secondary" fontWeight={800} variant="body2">
-          {formatPercent(spreadPercentage)} spread
-        </Typography>
-        <Typography color="text.secondary" variant="caption">
-          raw {formatStubs(spread)}
-        </Typography>
-      </Stack>
     </Paper>
   );
 }
