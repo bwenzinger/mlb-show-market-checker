@@ -1270,19 +1270,44 @@ function parseMonthDay(value: string | null | undefined): Date | null {
 function parseOrderDate(value: string | null | undefined): Date | null {
   if (!value) return null;
 
-  const match = value.match(
+  const isoDate = new Date(value);
+  if (Number.isFinite(isoDate.getTime()) && /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(value)) {
+    return isoDate;
+  }
+
+  const slashMatch = value.match(
     /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/,
   );
-  if (!match) return null;
+  if (slashMatch) {
+    return new Date(
+      Date.UTC(
+        Number(slashMatch[3]),
+        Number(slashMatch[1]) - 1,
+        Number(slashMatch[2]),
+        Number(slashMatch[4]),
+        Number(slashMatch[5]),
+        Number(slashMatch[6]),
+      ),
+    );
+  }
 
-  return new Date(
-    Number(match[3]),
-    Number(match[1]) - 1,
-    Number(match[2]),
-    Number(match[4]),
-    Number(match[5]),
-    Number(match[6]),
+  const sqlMatch = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/,
   );
+  if (sqlMatch) {
+    return new Date(
+      Date.UTC(
+        Number(sqlMatch[1]),
+        Number(sqlMatch[2]) - 1,
+        Number(sqlMatch[3]),
+        Number(sqlMatch[4]),
+        Number(sqlMatch[5]),
+        Number(sqlMatch[6]),
+      ),
+    );
+  }
+
+  return Number.isFinite(isoDate.getTime()) ? isoDate : null;
 }
 
 function toNumber(value: unknown): number | null {
@@ -1319,6 +1344,7 @@ function formatDateTime(value: Date): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZoneName: "short",
   }).format(value);
 }
 

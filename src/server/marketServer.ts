@@ -240,7 +240,9 @@ function startHttpServer() {
 
   app.get("/api/cards/:uuid/orders", (req, res) => {
     const days = clampInt(req.query.days, 7, 1, 3650);
-    const cutoff = toSqlDateTime(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+    const cutoff = toSqlDateTimeUtc(
+      new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+    );
     const rows = db
       .prepare(
         `
@@ -732,11 +734,11 @@ function normalizeOrderTime(value: string | null): string | null {
   )}:${match[5]}:${match[6]}`;
 }
 
-function toSqlDateTime(value: Date): string {
-  return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(
-    value.getDate(),
-  )} ${pad2(value.getHours())}:${pad2(value.getMinutes())}:${pad2(
-    value.getSeconds(),
+function toSqlDateTimeUtc(value: Date): string {
+  return `${value.getUTCFullYear()}-${pad2(value.getUTCMonth() + 1)}-${pad2(
+    value.getUTCDate(),
+  )} ${pad2(value.getUTCHours())}:${pad2(value.getUTCMinutes())}:${pad2(
+    value.getUTCSeconds(),
   )}`;
 }
 
