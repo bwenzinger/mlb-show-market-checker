@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Alert,
   Avatar,
@@ -1057,6 +1063,7 @@ function LineChart({
   const width = 720;
   const height = 260;
   const padding = 28;
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const primaryValues = points
     .map((point) => point.primary)
     .filter((value): value is number => value !== null);
@@ -1078,6 +1085,28 @@ function LineChart({
     padding + (index / Math.max(points.length - 1, 1)) * (width - padding * 2);
   const yFor = (value: number) =>
     height - padding - ((value - min) / range) * (height - padding * 2);
+  const getColumnBounds = (index: number) => {
+    const currentX = xFor(index);
+    const leftX = index === 0 ? 0 : (xFor(index - 1) + currentX) / 2;
+    const rightX =
+      index === points.length - 1 ? width : (currentX + xFor(index + 1)) / 2;
+
+    return {
+      columnWidth: Math.max(rightX - leftX, 1),
+      currentX,
+      leftX,
+    };
+  };
+  const showPointMarkers = points.length <= 1200;
+  const hoveredPoint = hoveredIndex === null ? null : points[hoveredIndex];
+  const hoveredColumn =
+    hoveredIndex === null ? null : getColumnBounds(hoveredIndex);
+
+  useEffect(() => {
+    if (hoveredIndex !== null && hoveredIndex >= points.length) {
+      setHoveredIndex(points.length > 0 ? points.length - 1 : null);
+    }
+  }, [hoveredIndex, points.length]);
 
   const pathFor = (key: "primary" | "secondary") => {
     let started = false;
@@ -1096,128 +1125,166 @@ function LineChart({
       .join(" ");
   };
 
+  const handleHoverMove = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (points.length === 0) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+
+    const relativeX = ((event.clientX - rect.left) / rect.width) * width;
+    const clampedX = Math.min(Math.max(relativeX, 0), width);
+    const usableWidth = Math.max(width - padding * 2, 1);
+    const ratio = (clampedX - padding) / usableWidth;
+    const nextIndex = Math.min(
+      Math.max(Math.round(ratio * Math.max(points.length - 1, 1)), 0),
+      points.length - 1,
+    );
+
+    setHoveredIndex((currentIndex) =>
+      currentIndex === nextIndex ? currentIndex : nextIndex,
+    );
+  };
+
   return (
     <Box>
-      <Box
-        component="svg"
-        role="img"
-        aria-label={
-          secondaryLabel
-            ? `${primaryLabel} and ${secondaryLabel} trend`
-            : `${primaryLabel} trend`
+      <Tooltip
+        arrow
+        disableInteractive
+        enterTouchDelay={0}
+        followCursor
+        open={hoveredPoint !== null}
+        title={
+          hoveredPoint ? (
+            <ChartTooltipContent
+              label={hoveredPoint.label}
+              primaryLabel={primaryLabel}
+              primaryValue={hoveredPoint.primary}
+              secondaryLabel={secondaryLabel}
+              secondaryValue={hoveredPoint.secondary}
+            />
+          ) : (
+            ""
+          )
         }
-        viewBox={`0 0 ${width} ${height}`}
-        sx={{
-          display: "block",
-          height: "auto",
-          overflow: "visible",
-          width: "100%",
-        }}
       >
-        <line
-          x1={padding}
-          x2={width - padding}
-          y1={height - padding}
-          y2={height - padding}
-          stroke="rgba(255,255,255,0.2)"
-        />
-        <line
-          x1={padding}
-          x2={padding}
-          y1={padding}
-          y2={height - padding}
-          stroke="rgba(255,255,255,0.2)"
-        />
-        <path
-          d={pathFor("primary")}
-          fill="none"
-          stroke="#7dd3a7"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="3"
-        />
-        {secondaryLabel ? (
-          <path
-            d={pathFor("secondary")}
-            fill="none"
-            stroke="#f7c873"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="3"
-          />
-        ) : null}
-        {points.map((point, index) => {
-          const currentX = xFor(index);
-          const leftX = index === 0 ? 0 : (xFor(index - 1) + currentX) / 2;
-          const rightX =
-            index === points.length - 1
-              ? width
-              : (currentX + xFor(index + 1)) / 2;
-          const columnWidth = Math.max(rightX - leftX, 1);
-          const primaryY = point.primary === null ? null : yFor(point.primary);
-          const secondaryY =
-            secondaryLabel && point.secondary !== null && point.secondary !== undefined
-              ? yFor(point.secondary)
-              : null;
-          if (primaryY === null && secondaryY === null) return null;
-
-          return (
-            <Tooltip
-              arrow
-              enterTouchDelay={0}
-              key={`${point.label}-${index}`}
-              title={
-                <ChartTooltipContent
-                  label={point.label}
-                  primaryLabel={primaryLabel}
-                  primaryValue={point.primary}
-                  secondaryLabel={secondaryLabel}
-                  secondaryValue={point.secondary}
-                />
-              }
-            >
-              <g
-                aria-label={formatChartPointAriaLabel({
-                  label: point.label,
+        <Box
+          aria-label={
+            hoveredPoint
+              ? formatChartPointAriaLabel({
+                  label: hoveredPoint.label,
                   primaryLabel,
-                  primaryValue: point.primary,
+                  primaryValue: hoveredPoint.primary,
                   secondaryLabel,
-                  secondaryValue: point.secondary,
-                })}
-                role="img"
-                style={{ cursor: "crosshair", outline: "none" }}
-                tabIndex={0}
-              >
-                <rect
-                  fill="transparent"
-                  height={height}
-                  pointerEvents="all"
-                  stroke="transparent"
-                  width={columnWidth}
-                  x={leftX}
-                  y={0}
-                />
-                {primaryY !== null ? (
-                  <circle
-                    cx={currentX}
-                    cy={primaryY}
-                    fill="#7dd3a7"
-                    r={pointRadius}
-                  />
-                ) : null}
-                {secondaryY !== null ? (
-                  <circle
-                    cx={currentX}
-                    cy={secondaryY}
-                    fill="#f7c873"
-                    r={pointRadius}
-                  />
-                ) : null}
-              </g>
-            </Tooltip>
-          );
-        })}
-      </Box>
+                  secondaryValue: hoveredPoint.secondary,
+                })
+              : undefined
+          }
+          onMouseLeave={() => setHoveredIndex(null)}
+          onMouseMove={handleHoverMove}
+          role="img"
+          sx={{ cursor: "crosshair" }}
+        >
+          <Box
+            component="svg"
+            role="img"
+            aria-label={
+              secondaryLabel
+                ? `${primaryLabel} and ${secondaryLabel} trend`
+                : `${primaryLabel} trend`
+            }
+            viewBox={`0 0 ${width} ${height}`}
+            sx={{
+              display: "block",
+              height: "auto",
+              overflow: "visible",
+              width: "100%",
+            }}
+          >
+            <line
+              x1={padding}
+              x2={width - padding}
+              y1={height - padding}
+              y2={height - padding}
+              stroke="rgba(255,255,255,0.2)"
+            />
+            <line
+              x1={padding}
+              x2={padding}
+              y1={padding}
+              y2={height - padding}
+              stroke="rgba(255,255,255,0.2)"
+            />
+            {hoveredColumn ? (
+              <rect
+                fill="rgba(125, 211, 167, 0.08)"
+                height={height}
+                pointerEvents="none"
+                width={hoveredColumn.columnWidth}
+                x={hoveredColumn.leftX}
+                y={0}
+              />
+            ) : null}
+            <path
+              d={pathFor("primary")}
+              fill="none"
+              stroke="#7dd3a7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3"
+            />
+            {secondaryLabel ? (
+              <path
+                d={pathFor("secondary")}
+                fill="none"
+                stroke="#f7c873"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="3"
+              />
+            ) : null}
+            {points.map((point, index) => {
+              const currentX = xFor(index);
+              const primaryY =
+                point.primary === null ? null : yFor(point.primary);
+              const secondaryY =
+                secondaryLabel &&
+                point.secondary !== null &&
+                point.secondary !== undefined
+                  ? yFor(point.secondary)
+                  : null;
+              const shouldRenderMarker =
+                showPointMarkers || hoveredIndex === index;
+              if (
+                !shouldRenderMarker ||
+                (primaryY === null && secondaryY === null)
+              ) {
+                return null;
+              }
+
+              return (
+                <g key={`${point.label}-${index}`} pointerEvents="none">
+                  {primaryY !== null ? (
+                    <circle
+                      cx={currentX}
+                      cy={primaryY}
+                      fill="#7dd3a7"
+                      r={hoveredIndex === index ? pointRadius + 1 : pointRadius}
+                    />
+                  ) : null}
+                  {secondaryY !== null ? (
+                    <circle
+                      cx={currentX}
+                      cy={secondaryY}
+                      fill="#f7c873"
+                      r={hoveredIndex === index ? pointRadius + 1 : pointRadius}
+                    />
+                  ) : null}
+                </g>
+              );
+            })}
+          </Box>
+        </Box>
+      </Tooltip>
 
       <Stack direction="row" spacing={1.75} sx={{ mt: 1 }}>
         <LegendItem color="#7dd3a7" label={primaryLabel} />
