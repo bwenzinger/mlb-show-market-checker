@@ -15,6 +15,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Skeleton,
   Slider,
   Stack,
   Table,
@@ -67,6 +68,7 @@ interface FilterState {
   minSpreadForPercent: number;
   rarity: string;
   searchText: string;
+  selectedUuid: string | null;
   sort: SortKey;
 }
 
@@ -104,7 +106,9 @@ export default function App() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [listingState, setListingState] = useState<LoadState>("idle");
   const [listingError, setListingError] = useState("");
-  const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
+  const [selectedUuid, setSelectedUuid] = useState<string | null>(
+    initialFilters.selectedUuid,
+  );
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [storedCompletedOrders, setStoredCompletedOrders] = useState<
     CompletedOrder[] | null
@@ -125,9 +129,10 @@ export default function App() {
       minSpreadForPercent,
       rarity,
       searchText: query,
+      selectedUuid,
       sort,
     });
-  }, [minSpreadForPercent, query, rarity, sort]);
+  }, [minSpreadForPercent, query, rarity, selectedUuid, sort]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -543,6 +548,11 @@ function SearchPanel({
   setSort: (value: SortKey) => void;
   sort: SortKey;
 }) {
+  const showInitialLoadingState =
+    listingState === "loading" && listings.length === 0;
+  const showRefreshingOverlay =
+    listingState === "loading" && listings.length > 0;
+
   return (
     <Paper
       component="aside"
@@ -626,70 +636,142 @@ function SearchPanel({
         ) : null}
 
         <Box sx={{ position: "relative" }}>
-          <List
-            aria-label="Market listings"
-            disablePadding
-            sx={{
-              display: "grid",
-              gap: 1,
-              maxHeight: { xs: 440, lg: "calc(100vh - 250px)" },
-              overflow: "auto",
-              pr: 0.5,
-            }}
-          >
-            {listings.map((listing, index) => {
-              const uuid = listing.item?.uuid;
-              const active = uuid === selectedUuid;
-              const image =
-                listing.item?.baked_img ?? listing.item?.img ?? undefined;
-              const metric = getListingSortMetric(listing, sort);
+          {showInitialLoadingState ? (
+            <ListLoadingState />
+          ) : (
+            <List
+              aria-label="Market listings"
+              disablePadding
+              sx={{
+                display: "grid",
+                gap: 1,
+                maxHeight: { xs: 440, lg: "calc(100vh - 250px)" },
+                minHeight: 240,
+                overflow: "auto",
+                pr: 0.5,
+              }}
+            >
+              {listings.map((listing, index) => {
+                const uuid = listing.item?.uuid;
+                const active = uuid === selectedUuid;
+                const image =
+                  listing.item?.baked_img ?? listing.item?.img ?? undefined;
+                const metric = getListingSortMetric(listing, sort);
 
-              return (
-                <ListItemButton
-                  disabled={!uuid}
-                  key={uuid ?? `${listing.listing_name ?? "listing"}-${index}`}
-                  onClick={() => uuid && setSelectedUuid(uuid)}
-                  selected={active}
-                  sx={{
-                    border: 1,
-                    borderColor: active ? "primary.main" : "divider",
-                    borderRadius: 1,
-                    gap: 1,
-                  }}
-                >
-                  <ListItemAvatar sx={{ minWidth: 48 }}>
-                    <Avatar
-                      src={image}
-                      variant="square"
-                      sx={{
-                        bgcolor: "background.default",
-                        objectFit: "contain",
-                      }}
-                    >
-                      {listing.listing_name?.charAt(0) ?? "?"}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={listing.listing_name ?? listing.item?.name}
-                    primaryTypographyProps={{ fontWeight: 800, noWrap: true }}
-                    secondary={getListingListSummary(listing)}
-                    secondaryTypographyProps={{ noWrap: true }}
-                  />
-                  <Box sx={{ flex: "0 0 auto", textAlign: "right" }}>
-                    <Typography color="secondary" fontWeight={900}>
-                      {metric.value}
-                    </Typography>
-                    <Typography color="text.secondary" variant="caption">
-                      {metric.label}
-                    </Typography>
-                  </Box>
-                </ListItemButton>
-              );
-            })}
-          </List>
+                return (
+                  <ListItemButton
+                    disabled={!uuid}
+                    key={uuid ?? `${listing.listing_name ?? "listing"}-${index}`}
+                    onClick={() => uuid && setSelectedUuid(uuid)}
+                    selected={active}
+                    sx={{
+                      border: 1,
+                      borderColor: active ? "primary.main" : "divider",
+                      borderRadius: 1,
+                      gap: 1,
+                    }}
+                  >
+                    <ListItemAvatar sx={{ minWidth: 48 }}>
+                      <Avatar
+                        src={image}
+                        variant="square"
+                        sx={{
+                          bgcolor: "background.default",
+                          objectFit: "contain",
+                        }}
+                      >
+                        {listing.listing_name?.charAt(0) ?? "?"}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={listing.listing_name ?? listing.item?.name}
+                      primaryTypographyProps={{ fontWeight: 800, noWrap: true }}
+                      secondary={getListingListSummary(listing)}
+                      secondaryTypographyProps={{ noWrap: true }}
+                    />
+                    <Box sx={{ flex: "0 0 auto", textAlign: "right" }}>
+                      <Typography color="secondary" fontWeight={900}>
+                        {metric.value}
+                      </Typography>
+                      <Typography color="text.secondary" variant="caption">
+                        {metric.label}
+                      </Typography>
+                    </Box>
+                  </ListItemButton>
+                );
+              })}
+            </List>
+          )}
+
+          {showRefreshingOverlay ? (
+            <Box
+              role="status"
+              aria-live="polite"
+              sx={{
+                alignItems: "center",
+                backdropFilter: "blur(2px)",
+                backgroundColor: "rgba(10, 15, 20, 0.58)",
+                borderRadius: 1,
+                bottom: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+                inset: 0,
+                justifyContent: "center",
+                position: "absolute",
+                zIndex: 1,
+              }}
+            >
+              <CircularProgress size={24} thickness={5} />
+              <Typography color="text.secondary" variant="body2">
+                Refreshing market listings...
+              </Typography>
+            </Box>
+          ) : null}
         </Box>
       </Stack>
     </Paper>
+  );
+}
+
+function ListLoadingState() {
+  return (
+    <Stack spacing={1} sx={{ minHeight: 240 }}>
+      <Typography color="text.secondary" variant="body2">
+        Loading market listings...
+      </Typography>
+      {Array.from({ length: 6 }, (_, index) => (
+        <Box
+          key={index}
+          sx={{
+            alignItems: "center",
+            border: 1,
+            borderColor: "divider",
+            borderRadius: 1,
+            display: "grid",
+            gap: 1,
+            gridTemplateColumns: "40px minmax(0, 1fr) 84px",
+            minHeight: 64,
+            px: 1.5,
+            py: 1,
+          }}
+        >
+          <Skeleton
+            animation="wave"
+            sx={{ borderRadius: 1, height: 40, transform: "none", width: 40 }}
+            variant="rectangular"
+          />
+          <Box sx={{ minWidth: 0 }}>
+            <Skeleton animation="wave" height={20} sx={{ maxWidth: "72%" }} />
+            <Skeleton animation="wave" height={16} sx={{ maxWidth: "88%" }} />
+          </Box>
+          <Box sx={{ justifySelf: "end", textAlign: "right", width: "100%" }}>
+            <Skeleton animation="wave" height={20} sx={{ ml: "auto", width: 56 }} />
+            <Skeleton animation="wave" height={16} sx={{ ml: "auto", width: 40 }} />
+          </Box>
+        </Box>
+      ))}
+    </Stack>
   );
 }
 
@@ -1403,6 +1485,9 @@ function readFiltersFromUrl(): FilterState {
   const searchText = searchParams.get("q") ?? "";
   const rarity = parseRarity(searchParams.get("rarity"));
   const sort = parseSort(searchParams.get("sort"));
+  const selectedUuid = parseSelectedUuid(
+    searchParams.get("uuid") ?? searchParams.get("item") ?? searchParams.get("card"),
+  );
   const minSpreadForPercent = parseMinSpread(
     searchParams.get("minSpread") ?? searchParams.get("min_spread"),
   );
@@ -1411,6 +1496,7 @@ function readFiltersFromUrl(): FilterState {
     minSpreadForPercent,
     rarity,
     searchText,
+    selectedUuid,
     sort,
   };
 }
@@ -1419,6 +1505,7 @@ function writeFiltersToUrl({
   minSpreadForPercent,
   rarity,
   searchText,
+  selectedUuid,
   sort,
 }: FilterState) {
   if (typeof window === "undefined") return;
@@ -1426,8 +1513,11 @@ function writeFiltersToUrl({
   const url = new URL(window.location.href);
   setSearchParam(url.searchParams, "q", searchText.trim());
   setSearchParam(url.searchParams, "rarity", rarity);
+  setSearchParam(url.searchParams, "uuid", selectedUuid ?? "");
   url.searchParams.set("sort", sort);
   url.searchParams.set("minSpread", String(Math.max(minSpreadForPercent, 0)));
+  url.searchParams.delete("item");
+  url.searchParams.delete("card");
   url.searchParams.delete("minProfit");
   url.searchParams.delete("min_profit");
   url.searchParams.delete("minProfitPercent");
@@ -1446,6 +1536,7 @@ function defaultFilters(): FilterState {
     minSpreadForPercent: DEFAULT_MIN_SPREAD_FOR_PERCENT,
     rarity: "",
     searchText: "",
+    selectedUuid: null,
     sort: DEFAULT_SORT,
   };
 }
@@ -1472,6 +1563,12 @@ function parseMinSpread(value: string | null): number {
   return Number.isFinite(parsed)
     ? Math.max(Math.trunc(parsed), 0)
     : DEFAULT_MIN_SPREAD_FOR_PERCENT;
+}
+
+function parseSelectedUuid(value: string | null): string | null {
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 function setSearchParam(
