@@ -43,6 +43,7 @@ import {
   type ApiSortKey,
   fetchStoredCompletedOrders,
   type CompletedOrder,
+  type ItemType,
   MARKET_ITEM_TYPES,
   type Listing,
   type ListingPriceHistoryPoint,
@@ -71,6 +72,7 @@ interface OrderBucket {
 }
 
 interface FilterState {
+  itemType: ItemType | "";
   minSpreadForPercent: number;
   rarity: string;
   searchText: string;
@@ -79,6 +81,14 @@ interface FilterState {
 }
 
 const rarityOptions = ["", "diamond", "gold", "silver", "bronze", "common"];
+const itemTypeOptions: Array<{ label: string; value: ItemType | "" }> = [
+  { label: "All", value: "" },
+  { label: "Players", value: "mlb_card" },
+  { label: "Stadiums", value: "stadium" },
+  { label: "Equipment", value: "equipment" },
+  { label: "Sponsorships", value: "sponsorship" },
+  { label: "Unlockables", value: "unlockable" },
+];
 const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: "Buy now", value: "best_sell_price" },
   { label: "Sell now", value: "best_buy_price" },
@@ -105,6 +115,9 @@ let listingsRefreshPromise: Promise<Listing[]> | null = null;
 export default function App() {
   const initialFilters = useMemo(readFiltersFromUrl, []);
   const [query, setQuery] = useState(initialFilters.searchText);
+  const [itemType, setItemType] = useState<ItemType | "">(
+    initialFilters.itemType,
+  );
   const [rarity, setRarity] = useState(initialFilters.rarity);
   const [sort, setSort] = useState<SortKey>(initialFilters.sort);
   const [minSpreadForPercent, setMinSpreadForPercent] = useState(
@@ -134,13 +147,14 @@ export default function App() {
 
   useEffect(() => {
     writeFiltersToUrl({
+      itemType,
       minSpreadForPercent,
       rarity,
       searchText: query.trim(),
       selectedUuid,
       sort,
     });
-  }, [minSpreadForPercent, query, rarity, selectedUuid, sort]);
+  }, [itemType, minSpreadForPercent, query, rarity, selectedUuid, sort]);
 
   useEffect(() => {
     let active = true;
@@ -151,6 +165,7 @@ export default function App() {
 
       try {
         const nextListings = await fetchSortedListings({
+          itemType,
           name: query.trim() || undefined,
           minSpreadForPercent,
           rarity: rarity || undefined,
@@ -184,7 +199,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [minSpreadForPercent, query, rarity, sort]);
+  }, [itemType, minSpreadForPercent, query, rarity, sort]);
 
   useEffect(() => {
     if (!selectedUuid) return;
@@ -356,6 +371,7 @@ export default function App() {
         }}
       >
         <SearchPanel
+          itemType={itemType}
           listings={listings}
           listingError={listingError}
           listingState={listingState}
@@ -363,6 +379,7 @@ export default function App() {
           rarity={rarity}
           searchText={query}
           selectedUuid={selectedUuid}
+          setItemType={setItemType}
           setMinSpreadForPercent={setMinSpreadForPercent}
           setRarity={setRarity}
           setSearchText={setQuery}
@@ -521,6 +538,7 @@ export default function App() {
 }
 
 function SearchPanel({
+  itemType,
   listings,
   listingError,
   listingState,
@@ -528,6 +546,7 @@ function SearchPanel({
   rarity,
   searchText,
   selectedUuid,
+  setItemType,
   setMinSpreadForPercent,
   setRarity,
   setSearchText,
@@ -535,6 +554,7 @@ function SearchPanel({
   setSort,
   sort,
 }: {
+  itemType: ItemType | "";
   listings: Listing[];
   listingError: string;
   listingState: LoadState;
@@ -542,6 +562,7 @@ function SearchPanel({
   rarity: string;
   searchText: string;
   selectedUuid: string | null;
+  setItemType: (value: ItemType | "") => void;
   setMinSpreadForPercent: (value: number) => void;
   setRarity: (value: string) => void;
   setSearchText: (value: string) => void;
@@ -570,6 +591,24 @@ function SearchPanel({
           type="search"
           value={searchText}
         />
+
+        <FormControl fullWidth>
+          <InputLabel id="item-type-label">Type</InputLabel>
+          <Select
+            label="Type"
+            labelId="item-type-label"
+            onChange={(event: SelectChangeEvent) =>
+              setItemType(event.target.value as ItemType | "")
+            }
+            value={itemType}
+          >
+            {itemTypeOptions.map((option) => (
+              <MenuItem key={option.value || "all"} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
         <Stack direction={{ xs: "column", sm: "row", lg: "row" }} spacing={1.5}>
           <FormControl fullWidth>
@@ -1588,6 +1627,7 @@ function readFiltersFromUrl(): FilterState {
 
   const searchParams = new URLSearchParams(window.location.search);
   const searchText = searchParams.get("q") ?? "";
+  const itemType = parseItemType(searchParams.get("type"));
   const rarity = parseRarity(searchParams.get("rarity"));
   const sort = parseSort(searchParams.get("sort"));
   const selectedUuid = parseSelectedUuid(
@@ -1598,6 +1638,7 @@ function readFiltersFromUrl(): FilterState {
   );
 
   return {
+    itemType,
     minSpreadForPercent,
     rarity,
     searchText,
@@ -1607,6 +1648,7 @@ function readFiltersFromUrl(): FilterState {
 }
 
 function writeFiltersToUrl({
+  itemType,
   minSpreadForPercent,
   rarity,
   searchText,
@@ -1617,6 +1659,7 @@ function writeFiltersToUrl({
 
   const url = new URL(window.location.href);
   setSearchParam(url.searchParams, "q", searchText.trim());
+  setSearchParam(url.searchParams, "type", itemType);
   setSearchParam(url.searchParams, "rarity", rarity);
   setSearchParam(url.searchParams, "uuid", selectedUuid ?? "");
   url.searchParams.set("sort", sort);
@@ -1638,12 +1681,21 @@ function writeFiltersToUrl({
 
 function defaultFilters(): FilterState {
   return {
+    itemType: "",
     minSpreadForPercent: DEFAULT_MIN_SPREAD_FOR_PERCENT,
     rarity: "",
     searchText: "",
     selectedUuid: null,
     sort: DEFAULT_SORT,
   };
+}
+
+function parseItemType(value: string | null): ItemType | "" {
+  if (!value) return "";
+
+  return MARKET_ITEM_TYPES.includes(value as ItemType)
+    ? (value as ItemType)
+    : "";
 }
 
 function parseRarity(value: string | null): string {
@@ -1689,11 +1741,13 @@ function setSearchParam(
 }
 
 async function fetchSortedListings({
+  itemType,
   minSpreadForPercent,
   name,
   rarity,
   sort,
 }: {
+  itemType: ItemType | "";
   minSpreadForPercent: number;
   name?: string;
   rarity?: string;
@@ -1703,6 +1757,7 @@ async function fetchSortedListings({
   const allListings = await fetchAllListings();
   const matchingListings = allListings.filter(
     (listing) =>
+      listingMatchesItemType(listing, itemType) &&
       listingMatchesRarity(listing, rarity) &&
       (!normalizedName ||
         listingMatchesNormalizedSearch(listing, normalizedName)),
@@ -1960,6 +2015,15 @@ function compactListingForCache(listing: Listing): Listing {
       : null,
     listing_name: listing.listing_name ?? item?.name ?? null,
   };
+}
+
+function listingMatchesItemType(
+  listing: Listing,
+  itemType: ItemType | "",
+): boolean {
+  if (!itemType) return true;
+
+  return listing.item?.type === itemType;
 }
 
 function listingMatchesRarity(
