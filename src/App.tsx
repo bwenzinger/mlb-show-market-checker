@@ -29,6 +29,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
@@ -139,10 +140,17 @@ export default function App() {
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [detailError, setDetailError] = useState("");
   const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
+  const [completedOrderPage, setCompletedOrderPage] = useState(0);
+  const [completedOrderRowsPerPage, setCompletedOrderRowsPerPage] =
+    useState(25);
   const selectedUuidRef = useRef(selectedUuid);
 
   useEffect(() => {
     selectedUuidRef.current = selectedUuid;
+  }, [selectedUuid]);
+
+  useEffect(() => {
+    setCompletedOrderPage(0);
   }, [selectedUuid]);
 
   useEffect(() => {
@@ -297,6 +305,31 @@ export default function App() {
     () => bucketOrdersByHour(completedOrders),
     [completedOrders],
   );
+  const allCompletedOrdersDescending = useMemo(
+    () => allCompletedOrders.slice().reverse(),
+    [allCompletedOrders],
+  );
+  const maxCompletedOrderPage = Math.max(
+    Math.ceil(allCompletedOrdersDescending.length / completedOrderRowsPerPage) -
+      1,
+    0,
+  );
+  const safeCompletedOrderPage = Math.min(
+    completedOrderPage,
+    maxCompletedOrderPage,
+  );
+  const paginatedAllCompletedOrders = useMemo(
+    () =>
+      allCompletedOrdersDescending.slice(
+        safeCompletedOrderPage * completedOrderRowsPerPage,
+        (safeCompletedOrderPage + 1) * completedOrderRowsPerPage,
+      ),
+    [
+      allCompletedOrdersDescending,
+      completedOrderRowsPerPage,
+      safeCompletedOrderPage,
+    ],
+  );
 
   const selectedName =
     selectedListing?.listing_name ??
@@ -308,8 +341,6 @@ export default function App() {
   const bestSell = toNumber(selectedListing?.best_sell_price);
   const earliestDaily = priceHistory[0]?.label ?? "Not returned";
   const earliestOrder = completedOrders[0]?.label ?? "Not returned";
-  const latestOrder =
-    completedOrders[completedOrders.length - 1]?.label ?? "Not returned";
   const earliestAllOrder = allCompletedOrders[0]?.label ?? "Not returned";
   const latestAllOrder =
     allCompletedOrders[allCompletedOrders.length - 1]?.label ?? "Not returned";
@@ -489,14 +520,14 @@ export default function App() {
 
             <Paper variant="outlined" sx={{ p: 1.75 }}>
               <SectionHeading
-                title="Recent completed orders"
-                meta={`${completedOrdersSource}: ${earliestOrder} to ${latestOrder}`}
+                title="All completed orders"
+                meta={`${allCompletedOrders.length} orders - ${allCompletedOrdersSource}: ${earliestAllOrder} to ${latestAllOrder}`}
               />
               <TableContainer sx={{ maxHeight: 360 }}>
                 <Table
                   stickyHeader
                   size="small"
-                  aria-label="Recent completed orders"
+                  aria-label="All completed orders"
                 >
                   <TableHead>
                     <TableRow>
@@ -505,23 +536,31 @@ export default function App() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {completedOrders
-                      .slice()
-                      .reverse()
-                      .slice(0, 40)
-                      .map((order, index) => (
-                        <TableRow
-                          key={`${order.label}-${order.price}-${index}`}
-                        >
-                          <TableCell>{order.label}</TableCell>
-                          <TableCell align="right">
-                            {formatStubs(order.price)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                    {paginatedAllCompletedOrders.map((order, index) => (
+                      <TableRow
+                        key={`${order.label}-${order.price}-${safeCompletedOrderPage}-${index}`}
+                      >
+                        <TableCell>{order.label}</TableCell>
+                        <TableCell align="right">
+                          {formatStubs(order.price)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component="div"
+                count={allCompletedOrdersDescending.length}
+                onPageChange={(_event, page) => setCompletedOrderPage(page)}
+                onRowsPerPageChange={(event) => {
+                  setCompletedOrderRowsPerPage(Number(event.target.value));
+                  setCompletedOrderPage(0);
+                }}
+                page={safeCompletedOrderPage}
+                rowsPerPage={completedOrderRowsPerPage}
+                rowsPerPageOptions={[25, 50, 100, 250]}
+              />
             </Paper>
 
             <ChartCard
