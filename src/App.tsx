@@ -46,7 +46,6 @@ import {
   MARKET_ITEM_TYPES,
   type Listing,
   type ListingPriceHistoryPoint,
-  type SortOrder,
   type SortKey,
 } from "./showApi";
 
@@ -89,7 +88,8 @@ const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: "Profit %", value: "profit_percentage" },
   { label: "Overall", value: "rank" },
 ];
-const LISTING_CACHE_MS = 60_000;
+const LISTING_CACHE_MS = 5 * 60_000;
+const LISTING_CACHE_STORAGE_KEY = "mlb-show-market-catalog-v2";
 const SALE_TAX_RATE = 0.1;
 const RECENT_ORDER_LOOKBACK_DAYS = 7;
 const ALL_ORDER_LOOKBACK_DAYS = 3650;
@@ -100,6 +100,7 @@ const fullListingsCache = new Map<
   string,
   { expiresAt: number; promise: Promise<Listing[]> }
 >();
+let listingsRefreshPromise: Promise<Listing[]> | null = null;
 
 export default function App() {
   const initialFilters = useMemo(readFiltersFromUrl, []);
@@ -124,6 +125,7 @@ export default function App() {
   >(null);
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [detailError, setDetailError] = useState("");
+  const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
   const selectedUuidRef = useRef(selectedUuid);
 
   useEffect(() => {
@@ -144,7 +146,7 @@ export default function App() {
     let active = true;
 
     async function loadListings() {
-      setListingState("loading");
+      setListingState((current) => (current === "ready" ? "ready" : "loading"));
       setListingError("");
 
       try {
@@ -199,6 +201,7 @@ export default function App() {
         if (!active) return;
         setSelectedListing(listing);
         setDetailState("ready");
+        setOrdersRefreshKey((value) => value + 1);
       } catch (error) {
         if (!active) return;
         setDetailState("error");
@@ -251,7 +254,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [selectedUuid]);
+  }, [ordersRefreshKey, selectedUuid]);
 
   const priceHistory = useMemo(
     () => normalizePriceHistory(selectedListing?.price_history ?? []),
@@ -1696,42 +1699,27 @@ async function fetchSortedListings({
   rarity?: string;
   sort: SortKey;
 }): Promise<Listing[]> {
-  const apiSort = apiSortFor(sort);
-  const order = sortOrderFor(apiSort);
   const normalizedName = normalizeSearchText(name ?? "");
+  const allListings = await fetchAllListings();
+  const matchingListings = allListings.filter(
+    (listing) =>
+      listingMatchesRarity(listing, rarity) &&
+      (!normalizedName ||
+        listingMatchesNormalizedSearch(listing, normalizedName)),
+  );
 
-  if (normalizedName || isSpreadSort(sort)) {
-    const allListings = await fetchAllListings({
-      order,
-      rarity,
-      sort: apiSort,
-    });
-    const searchedListings = normalizedName
-      ? allListings.filter((listing) =>
-          listingMatchesNormalizedSearch(listing, normalizedName),
-        )
-      : allListings;
-
-    return isSpreadSort(sort)
-      ? sortListingsBySpread(
-          filterListingsForSpreadSort(
-            searchedListings,
-            sort,
-            minSpreadForPercent,
-          ),
-          sort,
-        )
-      : sortListingsByStandardMetric(searchedListings, sort);
+  if (isSpreadSort(sort)) {
+    return sortListingsBySpread(
+      filterListingsForSpreadSort(
+        matchingListings,
+        sort,
+        minSpreadForPercent,
+      ),
+      sort,
+    );
   }
 
-  return sortListingsByStandardMetric(
-    await fetchAllListings({
-      order,
-      rarity,
-      sort: apiSort,
-    }),
-    sort,
-  );
+  return sortListingsByStandardMetric(matchingListings, sort);
 }
 
 function sortListingsByStandardMetric(
@@ -1782,31 +1770,50 @@ function listingStandardSortValue(
   return toNumber(listing.item?.["new_rank"] ?? listing.item?.ovr);
 }
 
-async function fetchAllListings({
-  order,
-  rarity,
-  sort,
-}: {
-  order: SortOrder;
-  rarity?: string;
-  sort: ApiSortKey;
-}): Promise<Listing[]> {
-  const cacheKey = JSON.stringify({ order, rarity: rarity ?? "", sort });
+async function fetchAllListings(): Promise<Listing[]> {
+  const cacheKey = "all-market-listings";
   const cached = fullListingsCache.get(cacheKey);
 
   if (cached && cached.expiresAt > Date.now()) {
     return cached.promise;
   }
 
-  const promise = fetchAllListingsUncached({ order, rarity, sort }).catch(
-    (error) => {
+  if (cached) {
+    refreshAllListingsCacheInBackground(cacheKey);
+    return cached.promise;
+  }
+
+  const stored = readStoredListingsCache();
+  if (stored) {
+    const promise = Promise.resolve(stored.listings);
+    fullListingsCache.set(cacheKey, {
+      expiresAt: stored.expiresAt,
+      promise,
+    });
+
+    if (stored.expiresAt <= Date.now()) {
+      refreshAllListingsCacheInBackground(cacheKey);
+    }
+
+    return promise;
+  }
+
+  return refreshAllListingsCache(cacheKey);
+}
+
+function refreshAllListingsCache(cacheKey: string): Promise<Listing[]> {
+  const promise = fetchAllListingsUncached()
+    .then((listings) => {
+      writeStoredListingsCache(listings);
+      return listings;
+    })
+    .catch((error) => {
       if (fullListingsCache.get(cacheKey)?.promise === promise) {
         fullListingsCache.delete(cacheKey);
       }
 
       throw error;
-    },
-  );
+    });
 
   fullListingsCache.set(cacheKey, {
     expiresAt: Date.now() + LISTING_CACHE_MS,
@@ -1816,40 +1823,42 @@ async function fetchAllListings({
   return promise;
 }
 
-async function fetchAllListingsUncached({
-  order,
-  rarity,
-  sort,
-}: {
-  order: SortOrder;
-  rarity?: string;
-  sort: ApiSortKey;
-}): Promise<Listing[]> {
+function refreshAllListingsCacheInBackground(cacheKey: string) {
+  if (listingsRefreshPromise) return;
+
+  listingsRefreshPromise = fetchAllListingsUncached()
+    .then((listings) => {
+      writeStoredListingsCache(listings);
+      fullListingsCache.set(cacheKey, {
+        expiresAt: Date.now() + LISTING_CACHE_MS,
+        promise: Promise.resolve(listings),
+      });
+
+      return listings;
+    })
+    .catch(() => [])
+    .finally(() => {
+      listingsRefreshPromise = null;
+    });
+}
+
+async function fetchAllListingsUncached(): Promise<Listing[]> {
   const allListings = await mapWithConcurrency(
     MARKET_ITEM_TYPES,
     MARKET_ITEM_TYPES.length,
-    async (type) => fetchAllListingsForType({ order, rarity, sort, type }),
+    fetchAllListingsForType,
   );
 
   return allListings.flat();
 }
 
-async function fetchAllListingsForType({
-  order,
-  rarity,
-  sort,
-  type,
-}: {
-  order: SortOrder;
-  rarity?: string;
-  sort: ApiSortKey;
-  type: (typeof MARKET_ITEM_TYPES)[number];
-}): Promise<Listing[]> {
+async function fetchAllListingsForType(
+  type: (typeof MARKET_ITEM_TYPES)[number],
+): Promise<Listing[]> {
   const firstResponse = await fetchListings({
     page: 1,
-    rarity,
-    sort,
-    order,
+    sort: "rank",
+    order: "desc",
     type,
   });
 
@@ -1868,9 +1877,8 @@ async function fetchAllListingsForType({
     async (page) => {
       const response = await fetchListings({
         page,
-        rarity,
-        sort,
-        order,
+        sort: "rank",
+        order: "desc",
         type,
       });
 
@@ -1881,8 +1889,86 @@ async function fetchAllListingsForType({
   return [...(firstResponse.listings ?? []), ...remainingListings.flat()];
 }
 
-function apiSortFor(sort: SortKey): ApiSortKey {
-  return isSpreadSort(sort) ? "rank" : sort;
+function readStoredListingsCache():
+  | { expiresAt: number; listings: Listing[] }
+  | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const rawCache = window.localStorage.getItem(LISTING_CACHE_STORAGE_KEY);
+    if (!rawCache) return null;
+
+    const parsed = JSON.parse(rawCache) as {
+      listings?: unknown;
+      savedAt?: unknown;
+    };
+    if (!Array.isArray(parsed.listings) || typeof parsed.savedAt !== "number") {
+      return null;
+    }
+
+    return {
+      expiresAt: parsed.savedAt + LISTING_CACHE_MS,
+      listings: parsed.listings as Listing[],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredListingsCache(listings: Listing[]) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      LISTING_CACHE_STORAGE_KEY,
+      JSON.stringify({
+        listings: listings.map(compactListingForCache),
+        savedAt: Date.now(),
+      }),
+    );
+  } catch {
+    // Browser storage is best-effort; the in-memory cache still helps this tab.
+  }
+}
+
+function compactListingForCache(listing: Listing): Listing {
+  const item = listing.item;
+
+  return {
+    best_buy_price: listing.best_buy_price ?? null,
+    best_sell_price: listing.best_sell_price ?? null,
+    item: item
+      ? {
+          baked_img: item.baked_img ?? null,
+          baked_img_lg: item.baked_img_lg ?? null,
+          display_position: item.display_position ?? null,
+          display_secondary_positions:
+            item.display_secondary_positions ?? null,
+          img: item.img ?? null,
+          is_sellable: item.is_sellable ?? null,
+          name: item.name ?? null,
+          new_rank: item["new_rank"] ?? null,
+          ovr: item.ovr ?? null,
+          rarity: item.rarity ?? null,
+          series: item.series ?? null,
+          set_name: item.set_name ?? null,
+          team: item.team ?? null,
+          team_short_name: item.team_short_name ?? null,
+          type: item.type,
+          uuid: item.uuid,
+        }
+      : null,
+    listing_name: listing.listing_name ?? item?.name ?? null,
+  };
+}
+
+function listingMatchesRarity(
+  listing: Listing,
+  rarity: string | undefined,
+): boolean {
+  if (!rarity) return true;
+
+  return listing.item?.rarity?.toLowerCase() === rarity.toLowerCase();
 }
 
 function listingMatchesNormalizedSearch(

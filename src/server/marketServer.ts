@@ -247,7 +247,7 @@ function startHttpServer() {
   });
 
   app.get("/api/show/listing.json", async (req, res) => {
-    await sendShowApiJson(req, res, "/listing.json");
+    await sendShowListingJson(req, res);
   });
 
   app.get("/api/cards/:uuid/orders", (req, res) => {
@@ -347,6 +347,33 @@ async function sendShowApiJson(
   }
 }
 
+async function sendShowListingJson(req: Request, res: Response) {
+  try {
+    const detail = await requestJson<Listing>(
+      "/listing.json",
+      toShowSearchParams(req.query),
+    );
+
+    try {
+      const stats = persistListingDetail(detail, new Date().toISOString());
+      res.setHeader("X-Market-Orders-Seen", String(stats.ordersSeen));
+      res.setHeader("X-Market-Orders-Inserted", String(stats.ordersInserted));
+    } catch (error) {
+      console.error(
+        "Failed to persist on-demand listing refresh:",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
+    res.json(detail);
+  } catch (error) {
+    res.status(502).json({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 function toShowSearchParams(
   query: Request["query"],
 ): Record<string, string | number | undefined> {
@@ -416,18 +443,9 @@ async function runCollection({ limit }: CollectionOptions): Promise<CollectionSt
         const detail = await fetchListingByUuid(uuid);
         stats.listingRequests += 1;
 
-        upsertMarketCard(detail, new Date().toISOString());
-        const normalizedOrders = normalizeCompletedOrders(
-          uuid,
-          detail.completed_orders ?? [],
-        );
-        stats.ordersSeen += normalizedOrders.length;
-
-        withTransaction(() => {
-          for (const order of normalizedOrders) {
-            stats.ordersInserted += insertStoredOrder(uuid, order, startedAt);
-          }
-        });
+        const listingStats = persistListingDetail(detail, new Date().toISOString());
+        stats.ordersSeen += listingStats.ordersSeen;
+        stats.ordersInserted += listingStats.ordersInserted;
       } catch (error) {
         console.error(
           `Failed to collect listing ${uuid}:`,
@@ -504,6 +522,32 @@ async function fetchAllMarketListingsForType(
 
 async function fetchListingByUuid(uuid: string): Promise<Listing> {
   return requestJson<Listing>("/listing.json", { uuid });
+}
+
+function persistListingDetail(
+  listing: Listing,
+  capturedAt: string,
+): { ordersInserted: number; ordersSeen: number } {
+  const uuid = listing.item?.uuid;
+  if (!uuid) return { ordersInserted: 0, ordersSeen: 0 };
+
+  upsertMarketCard(listing, capturedAt);
+  const normalizedOrders = normalizeCompletedOrders(
+    uuid,
+    listing.completed_orders ?? [],
+  );
+  let ordersInserted = 0;
+
+  withTransaction(() => {
+    for (const order of normalizedOrders) {
+      ordersInserted += insertStoredOrder(uuid, order, capturedAt);
+    }
+  });
+
+  return {
+    ordersInserted,
+    ordersSeen: normalizedOrders.length,
+  };
 }
 
 function upsertMarketCard(listing: Listing, updatedAt: string) {
