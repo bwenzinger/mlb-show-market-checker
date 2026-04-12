@@ -51,7 +51,10 @@ export default function App() {
   >(null);
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [detailError, setDetailError] = useState("");
-  const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
+  const [recentOrdersState, setRecentOrdersState] = useState<LoadState>("idle");
+  const [recentOrdersError, setRecentOrdersError] = useState("");
+  const [allOrdersState, setAllOrdersState] = useState<LoadState>("idle");
+  const [allOrdersError, setAllOrdersError] = useState("");
   const [completedOrderPage, setCompletedOrderPage] = useState(0);
   const [completedOrderRowsPerPage, setCompletedOrderRowsPerPage] =
     useState(25);
@@ -122,23 +125,94 @@ export default function App() {
   }, [itemType, minSpreadForPercent, query, rarity, sort]);
 
   useEffect(() => {
-    if (!selectedUuid) return;
+    if (!selectedUuid) {
+      setSelectedListing(null);
+      setDetailState("idle");
+      setDetailError("");
+      setStoredCompletedOrders(null);
+      setStoredAllCompletedOrders(null);
+      setRecentOrdersState("idle");
+      setRecentOrdersError("");
+      setAllOrdersState("idle");
+      setAllOrdersError("");
+      return;
+    }
 
     let active = true;
     const uuid = selectedUuid;
+    let allOrdersTimeoutId: number | null = null;
+
+    setSelectedListing(null);
+    setStoredCompletedOrders(null);
+    setStoredAllCompletedOrders(null);
+    setDetailState("loading");
+    setDetailError("");
+    setRecentOrdersState("idle");
+    setRecentOrdersError("");
+    setAllOrdersState("idle");
+    setAllOrdersError("");
+
+    async function loadRecentOrders() {
+      setRecentOrdersState("loading");
+      setRecentOrdersError("");
+
+      try {
+        const recentOrders = await fetchStoredCompletedOrders({
+          days: RECENT_ORDER_LOOKBACK_DAYS,
+          uuid,
+        });
+        if (!active) return;
+
+        setStoredCompletedOrders(recentOrders.length > 0 ? recentOrders : null);
+        setRecentOrdersState("ready");
+      } catch (error) {
+        if (!active) return;
+
+        setStoredCompletedOrders(null);
+        setRecentOrdersState("error");
+        setRecentOrdersError(
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+
+    async function loadAllOrders() {
+      setAllOrdersState("loading");
+      setAllOrdersError("");
+
+      try {
+        const allOrders = await fetchStoredCompletedOrders({
+          days: ALL_ORDER_LOOKBACK_DAYS,
+          uuid,
+        });
+        if (!active) return;
+
+        setStoredAllCompletedOrders(allOrders.length > 0 ? allOrders : null);
+        setAllOrdersState("ready");
+      } catch (error) {
+        if (!active) return;
+
+        setStoredAllCompletedOrders(null);
+        setAllOrdersState("error");
+        setAllOrdersError(error instanceof Error ? error.message : String(error));
+      }
+    }
 
     async function loadDetail() {
-      setDetailState("loading");
-      setDetailError("");
-
       try {
         const listing = await fetchListingByUuid(uuid);
         if (!active) return;
+
         setSelectedListing(listing);
         setDetailState("ready");
-        setOrdersRefreshKey((value) => value + 1);
+        void loadRecentOrders();
+        allOrdersTimeoutId = window.setTimeout(() => {
+          if (!active) return;
+          void loadAllOrders();
+        }, 0);
       } catch (error) {
         if (!active) return;
+
         setDetailState("error");
         setDetailError(error instanceof Error ? error.message : String(error));
       }
@@ -148,71 +222,49 @@ export default function App() {
 
     return () => {
       active = false;
+      if (allOrdersTimeoutId !== null) {
+        window.clearTimeout(allOrdersTimeoutId);
+      }
     };
   }, [selectedUuid]);
-
-  useEffect(() => {
-    if (!selectedUuid) {
-      setStoredCompletedOrders(null);
-      setStoredAllCompletedOrders(null);
-      return;
-    }
-
-    let active = true;
-    const uuid = selectedUuid;
-    setStoredCompletedOrders(null);
-    setStoredAllCompletedOrders(null);
-
-    async function loadStoredOrders() {
-      try {
-        const [recentOrders, allOrders] = await Promise.all([
-          fetchStoredCompletedOrders({
-            days: RECENT_ORDER_LOOKBACK_DAYS,
-            uuid,
-          }),
-          fetchStoredCompletedOrders({
-            days: ALL_ORDER_LOOKBACK_DAYS,
-            uuid,
-          }),
-        ]);
-        if (!active) return;
-        setStoredCompletedOrders(recentOrders.length > 0 ? recentOrders : null);
-        setStoredAllCompletedOrders(allOrders.length > 0 ? allOrders : null);
-      } catch {
-        if (!active) return;
-        setStoredCompletedOrders(null);
-        setStoredAllCompletedOrders(null);
-      }
-    }
-
-    void loadStoredOrders();
-
-    return () => {
-      active = false;
-    };
-  }, [ordersRefreshKey, selectedUuid]);
 
   const priceHistory = useMemo(
     () => normalizePriceHistory(selectedListing?.price_history ?? []),
     [selectedListing],
   );
+  const liveCompletedOrders = useMemo(
+    () => normalizeOrders(selectedListing?.completed_orders ?? []),
+    [selectedListing],
+  );
+  const storedRecentOrderPoints = useMemo(
+    () => normalizeOrders(storedCompletedOrders ?? []),
+    [storedCompletedOrders],
+  );
+  const storedAllOrderPoints = useMemo(
+    () => normalizeOrders(storedAllCompletedOrders ?? []),
+    [storedAllCompletedOrders],
+  );
+  const selectedCatalogListing = useMemo(
+    () =>
+      listings.find((listing) => listing.item?.uuid === selectedUuid) ?? null,
+    [listings, selectedUuid],
+  );
+  const detailListing = selectedListing ?? selectedCatalogListing;
   const completedOrders = useMemo(
     () =>
-      normalizeOrders(
-        storedCompletedOrders?.length
-          ? storedCompletedOrders
-          : (selectedListing?.completed_orders ?? []),
-      ),
-    [selectedListing, storedCompletedOrders],
+      storedRecentOrderPoints.length > 0
+        ? storedRecentOrderPoints
+        : liveCompletedOrders,
+    [liveCompletedOrders, storedRecentOrderPoints],
   );
   const allCompletedOrders = useMemo(
     () =>
-      normalizeOrders(
-        storedAllCompletedOrders?.length
-          ? storedAllCompletedOrders
-          : (selectedListing?.completed_orders ?? []),
-      ),
-    [selectedListing, storedAllCompletedOrders],
+      storedAllOrderPoints.length > 0
+        ? storedAllOrderPoints
+        : allOrdersState === "loading"
+          ? []
+          : liveCompletedOrders,
+    [allOrdersState, liveCompletedOrders, storedAllOrderPoints],
   );
   const orderBuckets = useMemo(
     () => bucketOrdersByHour(completedOrders),
@@ -245,24 +297,21 @@ export default function App() {
   );
 
   const selectedName =
-    selectedListing?.listing_name ??
-    selectedListing?.item?.name ??
-    listings.find((listing) => listing.item?.uuid === selectedUuid)
-      ?.listing_name ??
+    detailListing?.listing_name ??
+    detailListing?.item?.name ??
     "Select an item";
   const selectedPrices = useMemo(
     () =>
-      selectedListing
-        ? getListingPrices(selectedListing)
+      detailListing
+        ? getListingPrices(detailListing)
         : { buyNow: null, sellNow: null },
-    [selectedListing],
+    [detailListing],
   );
   const bestBuy = selectedPrices.sellNow;
   const bestSell = selectedPrices.buyNow;
   const usesQuickSellFallback = useMemo(
-    () =>
-      selectedListing !== null && isUsingQuickSellFallback(selectedListing),
-    [selectedListing],
+    () => detailListing !== null && isUsingQuickSellFallback(detailListing),
+    [detailListing],
   );
   const earliestDaily = priceHistory[0]?.label ?? "Not returned";
   const earliestOrder = completedOrders[0]?.label ?? "Not returned";
@@ -272,16 +321,16 @@ export default function App() {
   const currentSpread = calculateSpread(selectedPrices);
   const currentProfit = calculateProfit(selectedPrices);
   const currentProfitPercentage = calculateProfitPercentage(selectedPrices);
-  const completedOrdersSource = storedCompletedOrders?.length
+  const completedOrdersSource = storedRecentOrderPoints.length > 0
     ? "Local database"
     : "Live API sample";
-  const allCompletedOrdersSource = storedAllCompletedOrders?.length
+  const allCompletedOrdersSource = storedAllOrderPoints.length > 0
     ? "Local database"
     : "Live API sample";
   const cardImage =
-    selectedListing?.item?.baked_img_lg ??
-    selectedListing?.item?.baked_img ??
-    selectedListing?.item?.img;
+    detailListing?.item?.baked_img_lg ??
+    detailListing?.item?.baked_img ??
+    detailListing?.item?.img;
 
   return (
     <Container maxWidth={false} sx={{ maxWidth: 1440, py: 3 }}>
@@ -340,6 +389,8 @@ export default function App() {
         <MarketDetail
           allCompletedOrders={allCompletedOrders}
           allCompletedOrdersDescending={allCompletedOrdersDescending}
+          allOrdersError={allOrdersError}
+          allOrdersState={allOrdersState}
           allCompletedOrdersSource={allCompletedOrdersSource}
           bestBuy={bestBuy}
           bestSell={bestSell}
@@ -359,8 +410,10 @@ export default function App() {
           orderBuckets={orderBuckets}
           paginatedAllCompletedOrders={paginatedAllCompletedOrders}
           priceHistory={priceHistory}
+          recentOrdersError={recentOrdersError}
+          recentOrdersState={recentOrdersState}
           safeCompletedOrderPage={safeCompletedOrderPage}
-          selectedListing={selectedListing}
+          selectedListing={detailListing}
           selectedName={selectedName}
           setCompletedOrderPage={setCompletedOrderPage}
           setCompletedOrderRowsPerPage={setCompletedOrderRowsPerPage}

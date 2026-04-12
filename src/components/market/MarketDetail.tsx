@@ -4,6 +4,7 @@ import {
   Box,
   Chip,
   Paper,
+  Skeleton,
   Stack,
   Table,
   TableBody,
@@ -31,6 +32,8 @@ import { ChartCard, MetricCard, ProfitMetric, QuickSellBadge, SectionHeading } f
 interface MarketDetailProps {
   allCompletedOrders: OrderPoint[];
   allCompletedOrdersDescending: OrderPoint[];
+  allOrdersError: string;
+  allOrdersState: LoadState;
   allCompletedOrdersSource: string;
   bestBuy: number | null;
   bestSell: number | null;
@@ -50,6 +53,8 @@ interface MarketDetailProps {
   orderBuckets: OrderBucket[];
   paginatedAllCompletedOrders: OrderPoint[];
   priceHistory: PricePoint[];
+  recentOrdersError: string;
+  recentOrdersState: LoadState;
   safeCompletedOrderPage: number;
   selectedListing: Listing | null;
   selectedName: string;
@@ -61,6 +66,8 @@ interface MarketDetailProps {
 export const MarketDetail = memo(function MarketDetail({
   allCompletedOrders,
   allCompletedOrdersDescending,
+  allOrdersError,
+  allOrdersState,
   allCompletedOrdersSource,
   bestBuy,
   bestSell,
@@ -80,6 +87,8 @@ export const MarketDetail = memo(function MarketDetail({
   orderBuckets,
   paginatedAllCompletedOrders,
   priceHistory,
+  recentOrdersError,
+  recentOrdersState,
   safeCompletedOrderPage,
   selectedListing,
   selectedName,
@@ -87,6 +96,19 @@ export const MarketDetail = memo(function MarketDetail({
   setCompletedOrderRowsPerPage,
   usesQuickSellFallback,
 }: MarketDetailProps) {
+  const recentOrdersMeta =
+    recentOrdersState === "loading" && completedOrdersSource !== "Local database"
+      ? `${completedOrders.length} orders - refreshing local history`
+      : `${completedOrders.length} orders - ${completedOrdersSource}`;
+  const allOrdersMeta =
+    allOrdersState === "loading"
+      ? "Loading long-term order history..."
+      : `${allCompletedOrders.length} orders - ${allCompletedOrdersSource}: ${earliestAllOrder} to ${latestAllOrder}`;
+  const showAllOrdersFallbackNotice =
+    allOrdersState === "error" && allCompletedOrdersSource === "Live API sample";
+  const showRecentOrdersFallbackNotice =
+    recentOrdersState === "error" && completedOrdersSource === "Live API sample";
+
   return (
     <Paper
       component="section"
@@ -192,17 +214,85 @@ export const MarketDetail = memo(function MarketDetail({
 
           <ChartCard
             title="Completed orders by hour"
-            meta={`${completedOrders.length} orders - ${completedOrdersSource}`}
+            meta={recentOrdersMeta}
           >
+            {showRecentOrdersFallbackNotice ? (
+              <Alert severity="warning" sx={{ mb: 1.5 }}>
+                Local recent order history could not be loaded. Showing the live
+                API sample instead.
+              </Alert>
+            ) : null}
             <OrderChart buckets={orderBuckets} />
           </ChartCard>
         </Box>
 
-        <Paper variant="outlined" sx={{ p: 1.75 }}>
-          <SectionHeading
-            title="All completed orders"
-            meta={`${allCompletedOrders.length} orders - ${allCompletedOrdersSource}: ${earliestAllOrder} to ${latestAllOrder}`}
-          />
+        <AllCompletedOrdersTableSection
+          allCompletedOrdersDescending={allCompletedOrdersDescending}
+          allOrdersMeta={allOrdersMeta}
+          allOrdersState={allOrdersState}
+          errorMessage={
+            showAllOrdersFallbackNotice
+              ? "Local long-term history could not be loaded. Showing the live API sample instead."
+              : allOrdersError
+          }
+          completedOrderRowsPerPage={completedOrderRowsPerPage}
+          paginatedAllCompletedOrders={paginatedAllCompletedOrders}
+          safeCompletedOrderPage={safeCompletedOrderPage}
+          setCompletedOrderPage={setCompletedOrderPage}
+          setCompletedOrderRowsPerPage={setCompletedOrderRowsPerPage}
+        />
+
+        <AllCompletedOrdersChartSection
+          allOrdersMeta={allOrdersMeta}
+          allOrdersState={allOrdersState}
+          errorMessage={
+            showAllOrdersFallbackNotice
+              ? "Local long-term history could not be loaded. Showing the live API sample instead."
+              : allOrdersError
+          }
+          orders={allCompletedOrders}
+        />
+      </Stack>
+    </Paper>
+  );
+});
+
+const AllCompletedOrdersTableSection = memo(function AllCompletedOrdersTableSection({
+  allCompletedOrdersDescending,
+  allOrdersMeta,
+  allOrdersState,
+  completedOrderRowsPerPage,
+  errorMessage,
+  paginatedAllCompletedOrders,
+  safeCompletedOrderPage,
+  setCompletedOrderPage,
+  setCompletedOrderRowsPerPage,
+}: {
+  allCompletedOrdersDescending: OrderPoint[];
+  allOrdersMeta: string;
+  allOrdersState: LoadState;
+  completedOrderRowsPerPage: number;
+  errorMessage: string;
+  paginatedAllCompletedOrders: OrderPoint[];
+  safeCompletedOrderPage: number;
+  setCompletedOrderPage: (value: number) => void;
+  setCompletedOrderRowsPerPage: (value: number) => void;
+}) {
+  return (
+    <Paper variant="outlined" sx={{ p: 1.75 }}>
+      <SectionHeading title="All completed orders" meta={allOrdersMeta} />
+      {allOrdersState === "loading" ? (
+        <OrderHistoryLoadingState
+          message="Loading long-term completed order history..."
+          variant="table"
+        />
+      ) : (
+        <>
+          {errorMessage ? (
+            <Alert severity="warning" sx={{ mb: 1.5 }}>
+              {errorMessage}
+            </Alert>
+          ) : null}
           <TableContainer sx={{ maxHeight: 360 }}>
             <Table stickyHeader size="small" aria-label="All completed orders">
               <TableHead>
@@ -237,15 +327,84 @@ export const MarketDetail = memo(function MarketDetail({
             rowsPerPage={completedOrderRowsPerPage}
             rowsPerPageOptions={[25, 50, 100, 250]}
           />
-        </Paper>
-
-        <ChartCard
-          title="Every completed order"
-          meta={`${allCompletedOrders.length} orders - ${allCompletedOrdersSource}: ${earliestAllOrder} to ${latestAllOrder}`}
-        >
-          <CompletedOrderTimelineChart orders={allCompletedOrders} />
-        </ChartCard>
-      </Stack>
+        </>
+      )}
     </Paper>
+  );
+});
+
+const AllCompletedOrdersChartSection = memo(function AllCompletedOrdersChartSection({
+  allOrdersMeta,
+  allOrdersState,
+  errorMessage,
+  orders,
+}: {
+  allOrdersMeta: string;
+  allOrdersState: LoadState;
+  errorMessage: string;
+  orders: OrderPoint[];
+}) {
+  return (
+    <ChartCard title="Every completed order" meta={allOrdersMeta}>
+      {allOrdersState === "loading" ? (
+        <OrderHistoryLoadingState
+          message="Preparing the full completed order timeline..."
+          variant="chart"
+        />
+      ) : (
+        <>
+          {errorMessage ? (
+            <Alert severity="warning" sx={{ mb: 1.5 }}>
+              {errorMessage}
+            </Alert>
+          ) : null}
+          <CompletedOrderTimelineChart orders={orders} />
+        </>
+      )}
+    </ChartCard>
+  );
+});
+
+const OrderHistoryLoadingState = memo(function OrderHistoryLoadingState({
+  message,
+  variant,
+}: {
+  message: string;
+  variant: "chart" | "table";
+}) {
+  return (
+    <Stack spacing={1.25}>
+      <Typography color="text.secondary" variant="body2">
+        {message}
+      </Typography>
+      {variant === "table" ? (
+        <>
+          {Array.from({ length: 6 }, (_, index) => (
+            <Skeleton
+              key={index}
+              animation="wave"
+              height={28}
+              sx={{ transform: "none" }}
+              variant="rounded"
+            />
+          ))}
+        </>
+      ) : (
+        <>
+          <Skeleton
+            animation="wave"
+            height={44}
+            sx={{ transform: "none" }}
+            variant="rounded"
+          />
+          <Skeleton
+            animation="wave"
+            height={260}
+            sx={{ transform: "none" }}
+            variant="rounded"
+          />
+        </>
+      )}
+    </Stack>
   );
 });
