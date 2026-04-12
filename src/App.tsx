@@ -808,13 +808,19 @@ function SearchPanel({
                     onClick={() => uuid && setSelectedUuid(uuid)}
                     selected={active}
                     sx={{
+                      alignItems: "center",
                       border: 1,
                       borderColor: active ? "primary.main" : "divider",
                       borderRadius: 1,
+                      display: "grid",
                       gap: 1,
+                      gridTemplateColumns: "40px minmax(0, 1fr) 108px",
+                      minHeight: 72,
+                      px: 1.5,
+                      py: 1,
                     }}
                   >
-                    <ListItemAvatar sx={{ minWidth: 48 }}>
+                    <ListItemAvatar sx={{ minWidth: 40 }}>
                       <Avatar
                         src={image}
                         variant="square"
@@ -831,23 +837,42 @@ function SearchPanel({
                       primaryTypographyProps={{ fontWeight: 800, noWrap: true }}
                       secondary={getListingListSummary(listing)}
                       secondaryTypographyProps={{ noWrap: true }}
+                      sx={{ m: 0, minWidth: 0 }}
                     />
-                    <Box sx={{ flex: "0 0 auto", textAlign: "right" }}>
+                    <Box
+                      sx={{
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textAlign: "right",
+                        width: "100%",
+                      }}
+                    >
                       <Stack
                         direction="row"
                         spacing={0.5}
                         sx={{
                           alignItems: "center",
+                          flexWrap: "nowrap",
                           justifyContent: "flex-end",
                           minWidth: 0,
+                          width: "100%",
                         }}
                       >
-                        <Typography color="secondary" fontWeight={900}>
+                        <Typography
+                          color="secondary"
+                          fontWeight={900}
+                          noWrap
+                          sx={{ minWidth: 0 }}
+                        >
                           {metric.value}
                         </Typography>
                         {showQuickSellBadge ? <QuickSellBadge /> : null}
                       </Stack>
-                      <Typography color="text.secondary" variant="caption">
+                      <Typography
+                        color="text.secondary"
+                        noWrap
+                        variant="caption"
+                      >
                         {metric.label}
                       </Typography>
                     </Box>
@@ -946,8 +971,8 @@ function ListLoadingState() {
             borderRadius: 1,
             display: "grid",
             gap: 1,
-            gridTemplateColumns: "40px minmax(0, 1fr) 84px",
-            minHeight: 64,
+            gridTemplateColumns: "40px minmax(0, 1fr) 108px",
+            minHeight: 72,
             px: 1.5,
             py: 1,
           }}
