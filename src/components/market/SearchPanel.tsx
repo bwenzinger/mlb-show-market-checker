@@ -79,7 +79,14 @@ export const SearchPanel = memo(function SearchPanel({
     <Paper
       component="aside"
       variant="outlined"
-      sx={{ alignSelf: "start", p: 2, position: { lg: "sticky" }, top: 16 }}
+      sx={{
+        alignSelf: "start",
+        minWidth: 0,
+        p: 2,
+        position: { lg: "sticky" },
+        top: 16,
+        width: "100%",
+      }}
     >
       <Stack spacing={1.5}>
         <DebounceTextField
@@ -175,7 +182,8 @@ export const SearchPanel = memo(function SearchPanel({
               aria-label="Market listings"
               disablePadding
               sx={{
-                display: "grid",
+                display: "flex",
+                flexDirection: "column",
                 gap: 1,
                 maxHeight: { xs: 440, lg: "calc(100vh - 250px)" },
                 minHeight: 240,
@@ -206,15 +214,16 @@ export const SearchPanel = memo(function SearchPanel({
                       border: 1,
                       borderColor: active ? "primary.main" : "divider",
                       borderRadius: 1,
-                      display: "grid",
-                      gap: 1,
-                      gridTemplateColumns: "40px minmax(0, 1fr) 108px",
+                      display: "flex",
+                      gap: 1.25,
                       minHeight: 72,
+                      overflow: "hidden",
                       px: 1.5,
                       py: 1,
+                      width: "100%",
                     }}
                   >
-                    <ListItemAvatar sx={{ minWidth: 40 }}>
+                    <ListItemAvatar sx={{ flex: "0 0 40px", minWidth: 40 }}>
                       <Avatar
                         src={image}
                         variant="square"
@@ -230,15 +239,27 @@ export const SearchPanel = memo(function SearchPanel({
                       primary={listing.listing_name ?? listing.item?.name}
                       primaryTypographyProps={{ fontWeight: 800, noWrap: true }}
                       secondary={getListingListSummary(listing)}
-                      secondaryTypographyProps={{ noWrap: true }}
-                      sx={{ m: 0, minWidth: 0 }}
+                      secondaryTypographyProps={{
+                        noWrap: true,
+                        variant: "body2",
+                      }}
+                      sx={{
+                        flex: 1,
+                        m: 0,
+                        minWidth: 0,
+                        "& .MuiListItemText-primary, & .MuiListItemText-secondary":
+                          {
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          },
+                      }}
                     />
                     <Box
                       sx={{
+                        flex: "0 0 auto",
                         minWidth: 0,
                         overflow: "hidden",
                         textAlign: "right",
-                        width: "100%",
                       }}
                     >
                       <Stack
@@ -249,7 +270,6 @@ export const SearchPanel = memo(function SearchPanel({
                           flexWrap: "nowrap",
                           justifyContent: "flex-end",
                           minWidth: 0,
-                          width: "100%",
                         }}
                       >
                         <Typography

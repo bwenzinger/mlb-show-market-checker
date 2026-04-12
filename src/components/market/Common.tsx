@@ -68,24 +68,30 @@ export const ListLoadingState = memo(function ListLoadingState() {
             border: 1,
             borderColor: "divider",
             borderRadius: 1,
-            display: "grid",
-            gap: 1,
-            gridTemplateColumns: "40px minmax(0, 1fr) 108px",
+            display: "flex",
+            gap: 1.25,
             minHeight: 72,
+            overflow: "hidden",
             px: 1.5,
             py: 1,
           }}
         >
           <Skeleton
             animation="wave"
-            sx={{ borderRadius: 1, height: 40, transform: "none", width: 40 }}
+            sx={{
+              borderRadius: 1,
+              flex: "0 0 40px",
+              height: 40,
+              transform: "none",
+              width: 40,
+            }}
             variant="rectangular"
           />
-          <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             <Skeleton animation="wave" height={20} sx={{ maxWidth: "72%" }} />
             <Skeleton animation="wave" height={16} sx={{ maxWidth: "88%" }} />
           </Box>
-          <Box sx={{ justifySelf: "end", textAlign: "right", width: "100%" }}>
+          <Box sx={{ flex: "0 0 auto", textAlign: "right" }}>
             <Skeleton
               animation="wave"
               height={20}

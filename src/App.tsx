@@ -311,7 +311,11 @@ export default function App() {
         aria-label="Market workspace"
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", lg: "370px minmax(0, 1fr)" },
+          gridTemplateColumns: {
+            xs: "1fr",
+            lg: "400px minmax(0, 1fr)",
+            xl: "430px minmax(0, 1fr)",
+          },
           gap: 2.5,
         }}
       >
