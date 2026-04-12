@@ -1262,6 +1262,13 @@ function LineChart({
         .filter((value): value is number => value !== null)
     : [];
   const allValues = [...primaryValues, ...secondaryValues];
+
+  useEffect(() => {
+    if (hoveredIndex !== null && hoveredIndex >= points.length) {
+      setHoveredIndex(points.length > 0 ? points.length - 1 : null);
+    }
+  }, [hoveredIndex, points.length]);
+
   if (allValues.length === 0) {
     return <Typography color="text.secondary">No prices returned.</Typography>;
   }
@@ -1290,12 +1297,6 @@ function LineChart({
   const hoveredPoint = hoveredIndex === null ? null : points[hoveredIndex];
   const hoveredColumn =
     hoveredIndex === null ? null : getColumnBounds(hoveredIndex);
-
-  useEffect(() => {
-    if (hoveredIndex !== null && hoveredIndex >= points.length) {
-      setHoveredIndex(points.length > 0 ? points.length - 1 : null);
-    }
-  }, [hoveredIndex, points.length]);
 
   const pathFor = (key: "primary" | "secondary") => {
     let started = false;
