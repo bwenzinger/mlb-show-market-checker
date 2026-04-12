@@ -107,6 +107,59 @@ const ALL_ORDER_LOOKBACK_DAYS = 3650;
 const DEFAULT_TIMELINE_WINDOW_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
 const DEFAULT_SORT: SortKey = "spread_percentage";
+const PLAYER_CARD_QUICK_SELL_VALUES = [
+  { maxOvr: 64, live: 5, nonLive: 2 },
+  { maxOvr: 74, live: 25, nonLive: 12 },
+  { maxOvr: 75, live: 50, nonLive: 25 },
+  { maxOvr: 76, live: 75, nonLive: 37 },
+  { maxOvr: 77, live: 100, nonLive: 50 },
+  { maxOvr: 78, live: 125, nonLive: 62 },
+  { maxOvr: 79, live: 150, nonLive: 75 },
+  { maxOvr: 80, live: 400, nonLive: 200 },
+  { maxOvr: 81, live: 600, nonLive: 300 },
+  { maxOvr: 82, live: 900, nonLive: 450 },
+  { maxOvr: 83, live: 1200, nonLive: 600 },
+  { maxOvr: 84, live: 1500, nonLive: 750 },
+  { maxOvr: 85, live: 3000, nonLive: 1500 },
+  { maxOvr: 86, live: 3750, nonLive: 1875 },
+  { maxOvr: 87, live: 4500, nonLive: 2250 },
+  { maxOvr: 88, live: 5500, nonLive: 2750 },
+  { maxOvr: 89, live: 7000, nonLive: 3500 },
+  { maxOvr: 90, live: 8000, nonLive: 4000 },
+  { maxOvr: 91, live: 9000, nonLive: 4500 },
+  { maxOvr: Infinity, live: 10000, nonLive: 5000 },
+] as const;
+const GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY = {
+  common: { live: 5, nonLive: 2 },
+  bronze: { live: 25, nonLive: 12 },
+  silver: { live: 50, nonLive: 25 },
+  gold: { live: 400, nonLive: 200 },
+  diamond: { live: 3000, nonLive: 1500 },
+} as const;
+const ITEM_QUICK_SELL_BY_TYPE_AND_RARITY: Partial<
+  Record<ItemType, Partial<Record<string, number>>>
+> = {
+  equipment: {
+    silver: 25,
+    gold: 100,
+    diamond: 1000,
+  },
+  sponsorship: {
+    silver: 25,
+    gold: 100,
+    diamond: 1000,
+  },
+  stadium: {
+    gold: 100,
+    diamond: 1000,
+  },
+  unlockable: {
+    silver: 100,
+    gold: 500,
+    diamond: 1000,
+  },
+};
+type PlayerCardQuickSellRarity = keyof typeof GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY;
 const fullListingsCache = new Map<
   string,
   { expiresAt: number; promise: Promise<Listing[]> }
@@ -337,25 +390,21 @@ export default function App() {
     listings.find((listing) => listing.item?.uuid === selectedUuid)
       ?.listing_name ??
     "Select an item";
-  const bestBuy = toNumber(selectedListing?.best_buy_price);
-  const bestSell = toNumber(selectedListing?.best_sell_price);
+  const selectedPrices = selectedListing
+    ? getListingPrices(selectedListing)
+    : { buyNow: null, sellNow: null };
+  const bestBuy = selectedPrices.sellNow;
+  const bestSell = selectedPrices.buyNow;
+  const usesQuickSellFallback =
+    selectedListing !== null && isUsingQuickSellFallback(selectedListing);
   const earliestDaily = priceHistory[0]?.label ?? "Not returned";
   const earliestOrder = completedOrders[0]?.label ?? "Not returned";
   const earliestAllOrder = allCompletedOrders[0]?.label ?? "Not returned";
   const latestAllOrder =
     allCompletedOrders[allCompletedOrders.length - 1]?.label ?? "Not returned";
-  const currentSpread =
-    bestBuy !== null && bestSell !== null
-      ? Math.max(bestSell - bestBuy, 0)
-      : null;
-  const currentProfit =
-    bestBuy !== null && bestSell !== null
-      ? calculateProfit({ buyNow: bestSell, sellNow: bestBuy })
-      : null;
-  const currentProfitPercentage =
-    bestBuy !== null && bestSell !== null
-      ? calculateProfitPercentage({ buyNow: bestSell, sellNow: bestBuy })
-      : null;
+  const currentSpread = calculateSpread(selectedPrices);
+  const currentProfit = calculateProfit(selectedPrices);
+  const currentProfitPercentage = calculateProfitPercentage(selectedPrices);
   const averageOrderPrice = average(
     completedOrders.map((order) => order.price),
   );
@@ -486,7 +535,11 @@ export default function App() {
               }}
             >
               <Metric label="Buy now" value={formatStubs(bestSell)} />
-              <Metric label="Sell now" value={formatStubs(bestBuy)} />
+              <Metric
+                badge={usesQuickSellFallback ? <QuickSellBadge /> : null}
+                label="Sell now"
+                value={formatStubs(bestBuy)}
+              />
               <ProfitMetric
                 profit={currentProfit}
                 profitPercentage={currentProfitPercentage}
@@ -495,6 +548,13 @@ export default function App() {
               <Metric label="Daily history starts" value={earliestDaily} />
               <Metric label="Granular orders start" value={earliestOrder} />
             </Box>
+
+            {usesQuickSellFallback ? (
+              <Alert severity="info" sx={{ py: 0.5 }}>
+                Sell now is using the default quick-sell floor because the
+                market buy side is currently 0.
+              </Alert>
+            ) : null}
 
             <Box
               sx={{
@@ -704,7 +764,7 @@ function SearchPanel({
 
         {isSpreadSort(sort) ? (
           <Alert severity="info" sx={{ py: 0.5 }}>
-            Spread and profit sorts hide items with Sell now at 0
+            Spread and profit sorts use the quick-sell floor when Sell now is 0
             {sort === "spread_percentage"
               ? ` and spreads below ${formatStubs(minSpreadForPercent)}.`
               : "."}
@@ -737,6 +797,9 @@ function SearchPanel({
                 const image =
                   listing.item?.baked_img ?? listing.item?.img ?? undefined;
                 const metric = getListingSortMetric(listing, sort);
+                const showQuickSellBadge =
+                  isUsingQuickSellFallback(listing) &&
+                  doesSortMetricUseQuickSell(sort);
 
                 return (
                   <ListItemButton
@@ -770,9 +833,20 @@ function SearchPanel({
                       secondaryTypographyProps={{ noWrap: true }}
                     />
                     <Box sx={{ flex: "0 0 auto", textAlign: "right" }}>
-                      <Typography color="secondary" fontWeight={900}>
-                        {metric.value}
-                      </Typography>
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        sx={{
+                          alignItems: "center",
+                          justifyContent: "flex-end",
+                          minWidth: 0,
+                        }}
+                      >
+                        <Typography color="secondary" fontWeight={900}>
+                          {metric.value}
+                        </Typography>
+                        {showQuickSellBadge ? <QuickSellBadge /> : null}
+                      </Stack>
                       <Typography color="text.secondary" variant="caption">
                         {metric.label}
                       </Typography>
@@ -897,20 +971,54 @@ function ListLoadingState() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  badge = null,
+  label,
+  value,
+}: {
+  badge?: React.ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
     <Paper variant="outlined" sx={{ minWidth: 0, p: 1.5 }}>
       <Typography color="text.secondary" variant="caption">
         {label}
       </Typography>
-      <Typography
-        fontWeight={900}
-        sx={{ overflowWrap: "anywhere" }}
-        variant="h6"
+      <Stack
+        direction="row"
+        spacing={0.75}
+        sx={{ alignItems: "center", flexWrap: "wrap", minWidth: 0 }}
       >
-        {value}
-      </Typography>
+        <Typography
+          fontWeight={900}
+          sx={{ overflowWrap: "anywhere" }}
+          variant="h6"
+        >
+          {value}
+        </Typography>
+        {badge}
+      </Stack>
     </Paper>
+  );
+}
+
+function QuickSellBadge() {
+  return (
+    <Chip
+      color="info"
+      label="QS"
+      size="small"
+      sx={{
+        fontSize: 10,
+        fontWeight: 900,
+        height: 18,
+        "& .MuiChip-label": {
+          px: 0.75,
+        },
+      }}
+      variant="outlined"
+    />
   );
 }
 
@@ -2118,6 +2226,10 @@ function isSpreadSort(
   );
 }
 
+function doesSortMetricUseQuickSell(sort: SortKey): boolean {
+  return sort === "best_buy_price" || isSpreadSort(sort);
+}
+
 function filterListingsForSpreadSort(
   listings: Listing[],
   sort: SortKey,
@@ -2211,10 +2323,73 @@ function getListingPrices(listing: Listing): {
   buyNow: number | null;
   sellNow: number | null;
 } {
+  const marketSellNow = toNumber(listing.best_buy_price);
+
   return {
     buyNow: toNumber(listing.best_sell_price),
-    sellNow: toNumber(listing.best_buy_price),
+    sellNow:
+      marketSellNow !== null && marketSellNow > 0
+        ? marketSellNow
+        : getQuickSellValue(listing),
   };
+}
+
+function isUsingQuickSellFallback(listing: Listing): boolean {
+  const marketSellNow = toNumber(listing.best_buy_price);
+  return (
+    (marketSellNow === null || marketSellNow <= 0) &&
+    getQuickSellValue(listing) !== null
+  );
+}
+
+function getQuickSellValue(listing: Listing): number | null {
+  const itemType = listing.item?.type as ItemType | undefined;
+
+  if (itemType === "mlb_card") {
+    return getPlayerCardQuickSellValue(listing);
+  }
+
+  const rarity = normalizeItemRarity(listing.item?.rarity);
+  if (!itemType || !rarity) return null;
+
+  return ITEM_QUICK_SELL_BY_TYPE_AND_RARITY[itemType]?.[rarity] ?? null;
+}
+
+function getPlayerCardQuickSellValue(listing: Listing): number | null {
+  const ovr = toNumber(listing.item?.ovr);
+  const isLiveCard = isLivePlayerCard(listing);
+
+  if (ovr !== null) {
+    const matchingTier = PLAYER_CARD_QUICK_SELL_VALUES.find(
+      (tier) => ovr <= tier.maxOvr,
+    );
+    if (matchingTier) {
+      return isLiveCard ? matchingTier.live : matchingTier.nonLive;
+    }
+  }
+
+  const rarity = normalizeItemRarity(listing.item?.rarity);
+  if (!isPlayerCardQuickSellRarity(rarity)) return null;
+
+  const fallback = GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY[rarity];
+  return isLiveCard ? fallback.live : fallback.nonLive;
+}
+
+function isLivePlayerCard(listing: Listing): boolean {
+  return listing.item?.series?.toLowerCase() === "live";
+}
+
+function isPlayerCardQuickSellRarity(
+  value: string | null,
+): value is PlayerCardQuickSellRarity {
+  return value !== null && value in GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY;
+}
+
+function normalizeItemRarity(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
 }
 
 function listingSpreadNumber(listing: Listing): number | null {
