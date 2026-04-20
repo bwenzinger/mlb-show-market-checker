@@ -7,9 +7,9 @@ import {
   type Listing,
   type ListingPriceHistoryPoint,
   type SortKey,
-} from "./showApi";
+} from './showApi';
 
-export type LoadState = "idle" | "loading" | "ready" | "error";
+export type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface PricePoint {
   date: Date;
@@ -31,7 +31,7 @@ export interface OrderBucket {
 }
 
 export interface FilterState {
-  itemType: ItemType | "";
+  itemType: ItemType | '';
   minSpreadForPercent: number;
   rarity: string;
   searchText: string;
@@ -39,32 +39,39 @@ export interface FilterState {
   sort: SortKey;
 }
 
-export const rarityOptions = ["", "diamond", "gold", "silver", "bronze", "common"];
-export const itemTypeOptions: Array<{ label: string; value: ItemType | "" }> = [
-  { label: "All", value: "" },
-  { label: "Players", value: "mlb_card" },
-  { label: "Stadiums", value: "stadium" },
-  { label: "Equipment", value: "equipment" },
-  { label: "Sponsorships", value: "sponsorship" },
-  { label: "Unlockables", value: "unlockable" },
+export const rarityOptions = [
+  '',
+  'diamond',
+  'gold',
+  'silver',
+  'bronze',
+  'common',
+];
+export const itemTypeOptions: Array<{ label: string; value: ItemType | '' }> = [
+  { label: 'All', value: '' },
+  { label: 'Players', value: 'mlb_card' },
+  { label: 'Stadiums', value: 'stadium' },
+  { label: 'Equipment', value: 'equipment' },
+  { label: 'Sponsorships', value: 'sponsorship' },
+  { label: 'Unlockables', value: 'unlockable' },
 ];
 export const sortOptions: Array<{ label: string; value: SortKey }> = [
-  { label: "Buy now", value: "best_sell_price" },
-  { label: "Sell now", value: "best_buy_price" },
-  { label: "Spread", value: "spread_number" },
-  { label: "Spread %", value: "spread_percentage" },
-  { label: "Profit", value: "profit" },
-  { label: "Profit %", value: "profit_percentage" },
-  { label: "Overall", value: "rank" },
+  { label: 'Buy now', value: 'best_sell_price' },
+  { label: 'Sell now', value: 'best_buy_price' },
+  { label: 'Spread', value: 'spread_number' },
+  { label: 'Spread %', value: 'spread_percentage' },
+  { label: 'Profit', value: 'profit' },
+  { label: 'Profit %', value: 'profit_percentage' },
+  { label: 'Overall', value: 'rank' },
 ];
 export const RECENT_ORDER_LOOKBACK_DAYS = 7;
 export const ALL_ORDER_LOOKBACK_DAYS = 3650;
 export const DEFAULT_TIMELINE_WINDOW_MS = 6 * 60 * 60 * 1000;
 export const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
-export const DEFAULT_SORT: SortKey = "spread_percentage";
+export const DEFAULT_SORT: SortKey = 'spread_percentage';
 
 const LISTING_CACHE_MS = 5 * 60_000;
-const LISTING_CACHE_STORAGE_KEY = "mlb-show-market-catalog-v2";
+const LISTING_CACHE_STORAGE_KEY = 'mlb-show-market-catalog-v2';
 const SALE_TAX_RATE = 0.1;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
   { maxOvr: 64, live: 5, nonLive: 2 },
@@ -119,7 +126,8 @@ const ITEM_QUICK_SELL_BY_TYPE_AND_RARITY: Partial<
   },
 };
 
-type PlayerCardQuickSellRarity = keyof typeof GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY;
+type PlayerCardQuickSellRarity =
+  keyof typeof GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY;
 
 const fullListingsCache = new Map<
   string,
@@ -128,7 +136,7 @@ const fullListingsCache = new Map<
 let listingsRefreshPromise: Promise<Listing[]> | null = null;
 
 export function normalizePriceHistory(
-  points: ListingPriceHistoryPoint[],
+  points: ListingPriceHistoryPoint[]
 ): PricePoint[] {
   return points
     .map((point) => {
@@ -186,23 +194,23 @@ export function bucketOrdersByHour(orders: OrderPoint[]): OrderBucket[] {
 }
 
 export function formatStubs(value: number | null): string {
-  if (value === null) return "-";
-  return Math.round(value).toLocaleString("en-US");
+  if (value === null) return '-';
+  return Math.round(value).toLocaleString('en-US');
 }
 
 export function formatDateTime(value: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
   }).format(value);
 }
 
 export function formatPercent(value: number | null): string {
-  if (value === null) return "-";
-  return `${value.toLocaleString("en-US", {
+  if (value === null) return '-';
+  return `${value.toLocaleString('en-US', {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
   })}%`;
@@ -213,15 +221,15 @@ export function titleCase(value: string): string {
 }
 
 export function getListingTypeLabel(
-  listing: Listing | null | undefined,
+  listing: Listing | null | undefined
 ): string {
   const type = listing?.item?.type;
-  if (!type) return "Item";
-  if (type === "mlb_card") return "MLB Card";
+  if (!type) return 'Item';
+  if (type === 'mlb_card') return 'MLB Card';
   return type
-    .split("_")
+    .split('_')
     .map((part) => titleCase(part))
-    .join(" ");
+    .join(' ');
 }
 
 export function getListingEyebrow(listing: Listing | null | undefined): string {
@@ -244,11 +252,11 @@ export function getListingListSummary(listing: Listing): string {
       : null,
   ].filter((part): part is string => Boolean(part));
 
-  return parts.join(" - ") || getListingTypeLabel(listing);
+  return parts.join(' - ') || getListingTypeLabel(listing);
 }
 
 export function getListingDetailSummary(
-  listing: Listing | null | undefined,
+  listing: Listing | null | undefined
 ): string {
   const parts = [
     listing?.item?.rarity ?? null,
@@ -260,26 +268,26 @@ export function getListingDetailSummary(
       : null,
   ].filter((part): part is string => Boolean(part));
 
-  return parts.join(" - ") || "Market item";
+  return parts.join(' - ') || 'Market item';
 }
 
 export function readFiltersFromUrl(): FilterState {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return defaultFilters();
   }
 
   const searchParams = new URLSearchParams(window.location.search);
-  const searchText = searchParams.get("q") ?? "";
-  const itemType = parseItemType(searchParams.get("type"));
-  const rarity = parseRarity(searchParams.get("rarity"));
-  const sort = parseSort(searchParams.get("sort"));
+  const searchText = searchParams.get('q') ?? '';
+  const itemType = parseItemType(searchParams.get('type'));
+  const rarity = parseRarity(searchParams.get('rarity'));
+  const sort = parseSort(searchParams.get('sort'));
   const selectedUuid = parseSelectedUuid(
-    searchParams.get("uuid") ??
-      searchParams.get("item") ??
-      searchParams.get("card"),
+    searchParams.get('uuid') ??
+      searchParams.get('item') ??
+      searchParams.get('card')
   );
   const minSpreadForPercent = parseMinSpread(
-    searchParams.get("minSpread") ?? searchParams.get("min_spread"),
+    searchParams.get('minSpread') ?? searchParams.get('min_spread')
   );
 
   return {
@@ -300,27 +308,27 @@ export function writeFiltersToUrl({
   selectedUuid,
   sort,
 }: FilterState) {
-  if (typeof window === "undefined") return;
+  if (typeof window === 'undefined') return;
 
   const url = new URL(window.location.href);
-  setSearchParam(url.searchParams, "q", searchText.trim());
-  setSearchParam(url.searchParams, "type", itemType);
-  setSearchParam(url.searchParams, "rarity", rarity);
-  setSearchParam(url.searchParams, "uuid", selectedUuid ?? "");
-  url.searchParams.set("sort", sort);
-  url.searchParams.set("minSpread", String(Math.max(minSpreadForPercent, 0)));
-  url.searchParams.delete("item");
-  url.searchParams.delete("card");
-  url.searchParams.delete("minProfit");
-  url.searchParams.delete("min_profit");
-  url.searchParams.delete("minProfitPercent");
-  url.searchParams.delete("minProfitPercentage");
-  url.searchParams.delete("min_profit_percent");
+  setSearchParam(url.searchParams, 'q', searchText.trim());
+  setSearchParam(url.searchParams, 'type', itemType);
+  setSearchParam(url.searchParams, 'rarity', rarity);
+  setSearchParam(url.searchParams, 'uuid', selectedUuid ?? '');
+  url.searchParams.set('sort', sort);
+  url.searchParams.set('minSpread', String(Math.max(minSpreadForPercent, 0)));
+  url.searchParams.delete('item');
+  url.searchParams.delete('card');
+  url.searchParams.delete('minProfit');
+  url.searchParams.delete('min_profit');
+  url.searchParams.delete('minProfitPercent');
+  url.searchParams.delete('minProfitPercentage');
+  url.searchParams.delete('min_profit_percent');
 
   const nextUrl = `${url.pathname}${url.search}${url.hash}`;
   const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (nextUrl !== currentUrl) {
-    window.history.replaceState(window.history.state, "", nextUrl);
+    window.history.replaceState(window.history.state, '', nextUrl);
   }
 }
 
@@ -331,30 +339,26 @@ export async function fetchSortedListings({
   rarity,
   sort,
 }: {
-  itemType: ItemType | "";
-  minSpreadForPercent: number;
+  itemType?: ItemType;
+  minSpreadForPercent?: number;
   name?: string;
   rarity?: string;
-  sort: SortKey;
+  sort?: SortKey;
 }): Promise<Listing[]> {
-  const normalizedName = normalizeSearchText(name ?? "");
+  const normalizedName = normalizeSearchText(name ?? '');
   const allListings = await fetchAllListings();
   const matchingListings = allListings.filter(
     (listing) =>
       listingMatchesItemType(listing, itemType) &&
       listingMatchesRarity(listing, rarity) &&
       (!normalizedName ||
-        listingMatchesNormalizedSearch(listing, normalizedName)),
+        listingMatchesNormalizedSearch(listing, normalizedName))
   );
 
   if (isSpreadSort(sort)) {
     return sortListingsBySpread(
-      filterListingsForSpreadSort(
-        matchingListings,
-        sort,
-        minSpreadForPercent,
-      ),
-      sort,
+      filterListingsForSpreadSort(matchingListings, sort, minSpreadForPercent),
+      sort
     );
   }
 
@@ -362,63 +366,63 @@ export async function fetchSortedListings({
 }
 
 export function isSpreadSort(
-  sort: SortKey,
+  sort?: SortKey
 ): sort is
-  | "spread_number"
-  | "spread_percentage"
-  | "profit"
-  | "profit_percentage" {
+  | 'spread_number'
+  | 'spread_percentage'
+  | 'profit'
+  | 'profit_percentage' {
   return (
-    sort === "spread_number" ||
-    sort === "spread_percentage" ||
-    sort === "profit" ||
-    sort === "profit_percentage"
+    sort === 'spread_number' ||
+    sort === 'spread_percentage' ||
+    sort === 'profit' ||
+    sort === 'profit_percentage'
   );
 }
 
-export function doesSortMetricUseQuickSell(sort: SortKey): boolean {
-  return sort === "best_buy_price" || isSpreadSort(sort);
+export function doesSortMetricUseQuickSell(sort?: SortKey): boolean {
+  return sort === 'best_buy_price' || isSpreadSort(sort);
 }
 
 export function getListingSortMetric(
   listing: Listing,
-  sort: SortKey,
+  sort?: SortKey
 ): { label: string; value: string } {
   const prices = getListingPrices(listing);
 
-  if (sort === "best_buy_price") {
-    return { label: "Sell now", value: formatStubs(prices.sellNow) };
+  if (sort === 'best_buy_price') {
+    return { label: 'Sell now', value: formatStubs(prices.sellNow) };
   }
 
-  if (sort === "spread_number") {
+  if (sort === 'spread_number') {
     return {
-      label: "Spread",
+      label: 'Spread',
       value: formatStubs(listingSpreadNumber(listing)),
     };
   }
 
-  if (sort === "spread_percentage") {
+  if (sort === 'spread_percentage') {
     return {
-      label: "Spread",
+      label: 'Spread',
       value: formatPercent(listingSpreadPercentage(listing)),
     };
   }
 
-  if (sort === "profit") {
+  if (sort === 'profit') {
     return {
-      label: "Profit",
+      label: 'Profit',
       value: formatStubs(listingProfit(listing)),
     };
   }
 
-  if (sort === "profit_percentage") {
+  if (sort === 'profit_percentage') {
     return {
-      label: "Profit %",
+      label: 'Profit %',
       value: formatPercent(listingProfitPercentage(listing)),
     };
   }
 
-  return { label: "Buy now", value: formatStubs(prices.buyNow) };
+  return { label: 'Buy now', value: formatStubs(prices.buyNow) };
 }
 
 export function getListingPrices(listing: Listing): {
@@ -514,7 +518,7 @@ function parseOrderDate(value: string | null | undefined): Date | null {
   }
 
   const slashMatch = value.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/,
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/
   );
   if (slashMatch) {
     return new Date(
@@ -524,13 +528,13 @@ function parseOrderDate(value: string | null | undefined): Date | null {
         Number(slashMatch[2]),
         Number(slashMatch[4]),
         Number(slashMatch[5]),
-        Number(slashMatch[6]),
-      ),
+        Number(slashMatch[6])
+      )
     );
   }
 
   const sqlMatch = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/,
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/
   );
   if (sqlMatch) {
     return new Date(
@@ -540,8 +544,8 @@ function parseOrderDate(value: string | null | undefined): Date | null {
         Number(sqlMatch[3]),
         Number(sqlMatch[4]),
         Number(sqlMatch[5]),
-        Number(sqlMatch[6]),
-      ),
+        Number(sqlMatch[6])
+      )
     );
   }
 
@@ -549,12 +553,12 @@ function parseOrderDate(value: string | null | undefined): Date | null {
 }
 
 function toNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "" || value === "-") {
+  if (value === null || value === undefined || value === '' || value === '-') {
     return null;
   }
 
   const normalized =
-    typeof value === "string" ? value.replace(/,/g, "") : value;
+    typeof value === 'string' ? value.replace(/,/g, '') : value;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -565,36 +569,36 @@ function average(values: number[]): number | null {
 }
 
 function formatDate(value: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
   }).format(value);
 }
 
 function defaultFilters(): FilterState {
   return {
-    itemType: "",
+    itemType: '',
     minSpreadForPercent: DEFAULT_MIN_SPREAD_FOR_PERCENT,
-    rarity: "",
-    searchText: "",
+    rarity: '',
+    searchText: '',
     selectedUuid: null,
     sort: DEFAULT_SORT,
   };
 }
 
-function parseItemType(value: string | null): ItemType | "" {
-  if (!value) return "";
+function parseItemType(value: string | null): ItemType | '' {
+  if (!value) return '';
 
   return MARKET_ITEM_TYPES.includes(value as ItemType)
     ? (value as ItemType)
-    : "";
+    : '';
 }
 
 function parseRarity(value: string | null): string {
-  if (!value) return "";
+  if (!value) return '';
 
   const normalized = value.toLowerCase();
-  return rarityOptions.includes(normalized) ? normalized : "";
+  return rarityOptions.includes(normalized) ? normalized : '';
 }
 
 function parseSort(value: string | null): SortKey {
@@ -604,7 +608,7 @@ function parseSort(value: string | null): SortKey {
 }
 
 function parseMinSpread(value: string | null): number {
-  if (value === null || value.trim() === "") {
+  if (value === null || value.trim() === '') {
     return DEFAULT_MIN_SPREAD_FOR_PERCENT;
   }
 
@@ -620,10 +624,22 @@ function parseSelectedUuid(value: string | null): string | null {
   return trimmed ? trimmed : null;
 }
 
+export function updateUrlParam(key: string, value: string | null) {
+  const url = new URL(window.location.href);
+
+  if (value === null || value === '') {
+    url.searchParams.delete(key);
+  } else {
+    url.searchParams.set(key, value);
+  }
+
+  window.history.replaceState({}, '', url);
+}
+
 function setSearchParam(
   searchParams: URLSearchParams,
   key: string,
-  value: string,
+  value: string
 ) {
   if (value) {
     searchParams.set(key, value);
@@ -634,12 +650,12 @@ function setSearchParam(
 
 function sortListingsByStandardMetric(
   listings: Listing[],
-  sort: Exclude<
+  sort?: Exclude<
     SortKey,
-    "spread_number" | "spread_percentage" | "profit" | "profit_percentage"
-  >,
+    'spread_number' | 'spread_percentage' | 'profit' | 'profit_percentage'
+  >
 ): Listing[] {
-  const direction = sortOrderFor(sort) === "asc" ? 1 : -1;
+  const direction = sortOrderFor(sort) === 'asc' ? 1 : -1;
 
   return listings.slice().sort((a, b) => {
     const aValue = listingStandardSortValue(a, sort);
@@ -657,118 +673,46 @@ function sortListingsByStandardMetric(
 }
 
 function compareListingNames(a: Listing, b: Listing): number {
-  return (a.listing_name ?? a.item?.name ?? "").localeCompare(
-    b.listing_name ?? b.item?.name ?? "",
+  return (a.listing_name ?? a.item?.name ?? '').localeCompare(
+    b.listing_name ?? b.item?.name ?? ''
   );
 }
 
 function listingStandardSortValue(
   listing: Listing,
-  sort: Exclude<
+  sort?: Exclude<
     SortKey,
-    "spread_number" | "spread_percentage" | "profit" | "profit_percentage"
-  >,
+    'spread_number' | 'spread_percentage' | 'profit' | 'profit_percentage'
+  >
 ): number | null {
-  if (sort === "best_sell_price") {
+  if (sort === 'best_sell_price') {
     return getListingPrices(listing).buyNow;
   }
 
-  if (sort === "best_buy_price") {
+  if (sort === 'best_buy_price') {
     return getListingPrices(listing).sellNow;
   }
 
-  return toNumber(listing.item?.["new_rank"] ?? listing.item?.ovr);
+  return toNumber(listing.item?.['new_rank'] ?? listing.item?.ovr);
 }
 
 async function fetchAllListings(): Promise<Listing[]> {
-  const cacheKey = "all-market-listings";
-  const cached = fullListingsCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.promise;
-  }
-
-  if (cached) {
-    refreshAllListingsCacheInBackground(cacheKey);
-    return cached.promise;
-  }
-
-  const stored = readStoredListingsCache();
-  if (stored) {
-    const promise = Promise.resolve(stored.listings);
-    fullListingsCache.set(cacheKey, {
-      expiresAt: stored.expiresAt,
-      promise,
-    });
-
-    if (stored.expiresAt <= Date.now()) {
-      refreshAllListingsCacheInBackground(cacheKey);
-    }
-
-    return promise;
-  }
-
-  return refreshAllListingsCache(cacheKey);
-}
-
-function refreshAllListingsCache(cacheKey: string): Promise<Listing[]> {
-  const promise = fetchAllListingsUncached()
-    .then((listings) => {
-      writeStoredListingsCache(listings);
-      return listings;
-    })
-    .catch((error) => {
-      if (fullListingsCache.get(cacheKey)?.promise === promise) {
-        fullListingsCache.delete(cacheKey);
-      }
-
-      throw error;
-    });
-
-  fullListingsCache.set(cacheKey, {
-    expiresAt: Date.now() + LISTING_CACHE_MS,
-    promise,
-  });
-
-  return promise;
-}
-
-function refreshAllListingsCacheInBackground(cacheKey: string) {
-  if (listingsRefreshPromise) return;
-
-  listingsRefreshPromise = fetchAllListingsUncached()
-    .then((listings) => {
-      writeStoredListingsCache(listings);
-      fullListingsCache.set(cacheKey, {
-        expiresAt: Date.now() + LISTING_CACHE_MS,
-        promise: Promise.resolve(listings),
-      });
-
-      return listings;
-    })
-    .catch(() => [])
-    .finally(() => {
-      listingsRefreshPromise = null;
-    });
-}
-
-async function fetchAllListingsUncached(): Promise<Listing[]> {
   const allListings = await mapWithConcurrency(
     MARKET_ITEM_TYPES,
     MARKET_ITEM_TYPES.length,
-    fetchAllListingsForType,
+    fetchAllListingsForType
   );
 
   return allListings.flat();
 }
 
 async function fetchAllListingsForType(
-  type: (typeof MARKET_ITEM_TYPES)[number],
+  type: (typeof MARKET_ITEM_TYPES)[number]
 ): Promise<Listing[]> {
   const firstResponse = await fetchListings({
     page: 1,
-    sort: "rank",
-    order: "desc",
+    sort: 'rank',
+    order: 'desc',
     type,
   });
 
@@ -779,7 +723,7 @@ async function fetchAllListingsForType(
   const totalPages = Math.max(Number(firstResponse.total_pages) || 1, 1);
   const remainingPages = Array.from(
     { length: totalPages - 1 },
-    (_, index) => index + 2,
+    (_, index) => index + 2
   );
   const remainingListings = await mapWithConcurrency(
     remainingPages,
@@ -787,94 +731,21 @@ async function fetchAllListingsForType(
     async (page) => {
       const response = await fetchListings({
         page,
-        sort: "rank",
-        order: "desc",
+        sort: 'rank',
+        order: 'desc',
         type,
       });
 
       return response.listings ?? [];
-    },
+    }
   );
 
   return [...(firstResponse.listings ?? []), ...remainingListings.flat()];
 }
 
-function readStoredListingsCache():
-  | { expiresAt: number; listings: Listing[] }
-  | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const rawCache = window.localStorage.getItem(LISTING_CACHE_STORAGE_KEY);
-    if (!rawCache) return null;
-
-    const parsed = JSON.parse(rawCache) as {
-      listings?: unknown;
-      savedAt?: unknown;
-    };
-    if (!Array.isArray(parsed.listings) || typeof parsed.savedAt !== "number") {
-      return null;
-    }
-
-    return {
-      expiresAt: parsed.savedAt + LISTING_CACHE_MS,
-      listings: parsed.listings as Listing[],
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredListingsCache(listings: Listing[]) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(
-      LISTING_CACHE_STORAGE_KEY,
-      JSON.stringify({
-        listings: listings.map(compactListingForCache),
-        savedAt: Date.now(),
-      }),
-    );
-  } catch {
-    // Browser storage is best-effort; the in-memory cache still helps this tab.
-  }
-}
-
-function compactListingForCache(listing: Listing): Listing {
-  const item = listing.item;
-
-  return {
-    best_buy_price: listing.best_buy_price ?? null,
-    best_sell_price: listing.best_sell_price ?? null,
-    item: item
-      ? {
-          baked_img: item.baked_img ?? null,
-          baked_img_lg: item.baked_img_lg ?? null,
-          display_position: item.display_position ?? null,
-          display_secondary_positions:
-            item.display_secondary_positions ?? null,
-          img: item.img ?? null,
-          is_sellable: item.is_sellable ?? null,
-          name: item.name ?? null,
-          new_rank: item["new_rank"] ?? null,
-          ovr: item.ovr ?? null,
-          rarity: item.rarity ?? null,
-          series: item.series ?? null,
-          set_name: item.set_name ?? null,
-          team: item.team ?? null,
-          team_short_name: item.team_short_name ?? null,
-          type: item.type,
-          uuid: item.uuid,
-        }
-      : null,
-    listing_name: listing.listing_name ?? item?.name ?? null,
-  };
-}
-
 function listingMatchesItemType(
   listing: Listing,
-  itemType: ItemType | "",
+  itemType?: ItemType | ''
 ): boolean {
   if (!itemType) return true;
 
@@ -883,7 +754,7 @@ function listingMatchesItemType(
 
 function listingMatchesRarity(
   listing: Listing,
-  rarity: string | undefined,
+  rarity: string | undefined
 ): boolean {
   if (!rarity) return true;
 
@@ -892,44 +763,44 @@ function listingMatchesRarity(
 
 function listingMatchesNormalizedSearch(
   listing: Listing,
-  normalizedNeedle: string,
+  normalizedNeedle: string
 ): boolean {
   const normalizedName = normalizeSearchText(
-    [listing.listing_name, listing.item?.name].filter(Boolean).join(" "),
+    [listing.listing_name, listing.item?.name].filter(Boolean).join(' ')
   );
 
   return (
     normalizedName.includes(normalizedNeedle) ||
     compactSearchText(normalizedName).includes(
-      compactSearchText(normalizedNeedle),
+      compactSearchText(normalizedNeedle)
     )
   );
 }
 
 function normalizeSearchText(value: string): string {
   return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
 
 function compactSearchText(value: string): string {
-  return value.replace(/\s+/g, "");
+  return value.replace(/\s+/g, '');
 }
 
 function filterListingsForSpreadSort(
   listings: Listing[],
   sort: SortKey,
-  minSpreadForPercent: number,
+  minSpreadForPercent?: number
 ): Listing[] {
   return listings.filter((listing) => {
     if (!hasNonZeroSellNow(listing)) return false;
-    if (sort !== "spread_percentage") return true;
+    if (sort !== 'spread_percentage') return true;
 
     const spread = listingSpreadNumber(listing);
-    return spread !== null && spread >= minSpreadForPercent;
+    return spread !== null && spread >= (minSpreadForPercent ?? 0);
   });
 }
 
@@ -945,24 +816,24 @@ function sortListingsBySpread(listings: Listing[], sort: SortKey): Listing[] {
     return (
       bValue - aValue ||
       (getListingPrices(b).buyNow ?? 0) - (getListingPrices(a).buyNow ?? 0) ||
-      (a.listing_name ?? "").localeCompare(b.listing_name ?? "")
+      (a.listing_name ?? '').localeCompare(b.listing_name ?? '')
     );
   });
 }
 
 function listingSpreadSortValue(
   listing: Listing,
-  sort: SortKey,
+  sort: SortKey
 ): number | null {
-  if (sort === "profit") {
+  if (sort === 'profit') {
     return listingProfit(listing);
   }
 
-  if (sort === "profit_percentage") {
+  if (sort === 'profit_percentage') {
     return listingProfitPercentage(listing);
   }
 
-  return sort === "spread_percentage"
+  return sort === 'spread_percentage'
     ? listingSpreadPercentage(listing)
     : listingSpreadNumber(listing);
 }
@@ -970,7 +841,7 @@ function listingSpreadSortValue(
 function getQuickSellValue(listing: Listing): number | null {
   const itemType = listing.item?.type as ItemType | undefined;
 
-  if (itemType === "mlb_card") {
+  if (itemType === 'mlb_card') {
     return getPlayerCardQuickSellValue(listing);
   }
 
@@ -986,7 +857,7 @@ function getPlayerCardQuickSellValue(listing: Listing): number | null {
 
   if (ovr !== null) {
     const matchingTier = PLAYER_CARD_QUICK_SELL_VALUES.find(
-      (tier) => ovr <= tier.maxOvr,
+      (tier) => ovr <= tier.maxOvr
     );
     if (matchingTier) {
       return isLiveCard ? matchingTier.live : matchingTier.nonLive;
@@ -1001,17 +872,17 @@ function getPlayerCardQuickSellValue(listing: Listing): number | null {
 }
 
 function isLivePlayerCard(listing: Listing): boolean {
-  return listing.item?.series?.toLowerCase() === "live";
+  return listing.item?.series?.toLowerCase() === 'live';
 }
 
 function isPlayerCardQuickSellRarity(
-  value: string | null,
+  value: string | null
 ): value is PlayerCardQuickSellRarity {
   return value !== null && value in GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY;
 }
 
 function normalizeItemRarity(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== 'string') return null;
 
   const normalized = value.trim().toLowerCase();
   return normalized || null;
@@ -1044,7 +915,7 @@ function hasNonZeroSellNow(listing: Listing): boolean {
 async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
-  mapper: (item: T) => Promise<R>,
+  mapper: (item: T) => Promise<R>
 ): Promise<R[]> {
   const results: R[] = [];
   let nextIndex = 0;
@@ -1057,13 +928,13 @@ async function mapWithConcurrency<T, R>(
         nextIndex += 1;
         results[currentIndex] = await mapper(items[currentIndex]);
       }
-    }),
+    })
   );
 
   return results;
 }
 
-function sortOrderFor(sort: ApiSortKey): "asc" | "desc" {
-  if (sort === "best_sell_price") return "asc";
-  return "desc";
+function sortOrderFor(sort?: ApiSortKey): 'asc' | 'desc' {
+  if (sort === 'best_sell_price') return 'asc';
+  return 'desc';
 }

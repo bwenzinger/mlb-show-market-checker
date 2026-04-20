@@ -1,83 +1,89 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Container, Stack, Typography } from "@mui/material";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Container, Stack, Typography } from '@mui/material';
 
-import { MarketDetail } from "./components/market/MarketDetail";
-import { SearchPanel } from "./components/market/SearchPanel";
+import { MarketDetail } from './components/market/Detail/MarketDetail';
+import { SearchPanel } from './components/market/SearchPanel';
 import {
   fetchSortedListings,
   readFiltersFromUrl,
   type LoadState,
   writeFiltersToUrl,
-} from "./marketUtils";
-import type { Listing, SortKey } from "./showApi";
+} from './marketUtils';
+import type { Listing, SortKey } from './showApi';
+import { useQueryParams } from './components/market/common/useQueryParams';
+import { FilterUrlParams } from './types';
 
 export default function App() {
-  const initialFilters = useMemo(readFiltersFromUrl, []);
-  const [query, setQuery] = useState(initialFilters.searchText);
-  const [itemType, setItemType] = useState(initialFilters.itemType);
-  const [rarity, setRarity] = useState(initialFilters.rarity);
-  const [sort, setSort] = useState<SortKey>(initialFilters.sort);
-  const [minSpreadForPercent, setMinSpreadForPercent] = useState(
-    initialFilters.minSpreadForPercent,
-  );
+  const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+  // const initialFilters = useMemo(readFiltersFromUrl, []);
+  // const [query, setQuery] = useState(initialFilters.searchText);
+  // const [itemType, setItemType] = useState(initialFilters.itemType);
+  // const [rarity, setRarity] = useState(initialFilters.rarity);
+  // const [sort, setSort] = useState<SortKey>(initialFilters.sort);
+  // const [minSpreadForPercent, setMinSpreadForPercent] = useState(
+  //   params?.minSpreadForPercent
+  // );
   const [listings, setListings] = useState<Listing[]>([]);
-  const [listingState, setListingState] = useState<LoadState>("idle");
-  const [listingError, setListingError] = useState("");
-  const [selectedUuid, setSelectedUuid] = useState<string | null>(
-    initialFilters.selectedUuid,
-  );
-  const selectedUuidRef = useRef(selectedUuid);
+  const [listingState, setListingState] = useState<LoadState>('idle');
+  const [listingError, setListingError] = useState('');
+  // const [selectedUuid, setSelectedUuid] = useState<string | null>(
+  //   initialFilters.selectedUuid
+  // );
+  // const selectedUuidRef = useRef(selectedUuid);
 
-  useEffect(() => {
-    selectedUuidRef.current = selectedUuid;
-  }, [selectedUuid]);
+  // useEffect(() => {
+  //   selectedUuidRef.current = selectedUuid;
+  // }, [selectedUuid]);
 
-  useEffect(() => {
-    writeFiltersToUrl({
-      itemType,
-      minSpreadForPercent,
-      rarity,
-      searchText: query.trim(),
-      selectedUuid,
-      sort,
-    });
-  }, [itemType, minSpreadForPercent, query, rarity, selectedUuid, sort]);
+  // useEffect(() => {
+  //   writeFiltersToUrl({
+  //     itemType,
+  //     minSpreadForPercent,
+  //     rarity,
+  //     searchText: query.trim(),
+  //     selectedUuid,
+  //     sort,
+  //   });
+  // }, [itemType, minSpreadForPercent, query, rarity, selectedUuid, sort]);
 
   useEffect(() => {
     let active = true;
 
     async function loadListings() {
-      setListingState((current) => (current === "ready" ? "ready" : "loading"));
-      setListingError("");
+      setListingState((current) => (current === 'ready' ? 'ready' : 'loading'));
+      setListingError('');
 
       try {
         const nextListings = await fetchSortedListings({
-          itemType,
-          minSpreadForPercent,
-          name: query.trim() || undefined,
-          rarity: rarity || undefined,
-          sort,
+          itemType: params?.itemType,
+          minSpreadForPercent: params?.minSpreadForPercent
+            ? Number(params?.minSpreadForPercent)
+            : undefined,
+          name: params?.query ? params.query.trim() : undefined,
+          rarity: params?.rarity || undefined,
+          sort: params?.sort,
         });
 
         if (!active) return;
 
         setListings(nextListings);
-        setListingState("ready");
+        setListingState('ready');
 
         const firstUuid = nextListings[0]?.item?.uuid;
-        const currentSelectedUuid = selectedUuidRef.current;
+        // const currentSelectedUuid = selectedUuidRef.current;
         const selectedUuidStillVisible = nextListings.some(
-          (listing) => listing.item?.uuid === currentSelectedUuid,
+          (listing) => listing.item?.uuid === params.uuid
         );
 
-        if (firstUuid && (!currentSelectedUuid || !selectedUuidStillVisible)) {
-          setSelectedUuid(firstUuid);
+        if (firstUuid && (!params.uuid || !selectedUuidStillVisible)) {
+          setQueryParams({ uuid: firstUuid });
+          // setSelectedUuid(firstUuid);
         }
       } catch (error) {
         if (!active) return;
 
         setListings([]);
-        setListingState("error");
+        setListingState('error');
         setListingError(error instanceof Error ? error.message : String(error));
       }
     }
@@ -87,20 +93,20 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [itemType, minSpreadForPercent, query, rarity, sort]);
-
-  const selectedCatalogListing = useMemo(
-    () =>
-      listings.find((listing) => listing.item?.uuid === selectedUuid) ?? null,
-    [listings, selectedUuid],
-  );
+  }, [
+    params?.itemType,
+    params?.minSpreadForPercent,
+    params?.query,
+    params?.rarity,
+    params?.sort,
+  ]);
 
   return (
     <Container maxWidth={false} sx={{ maxWidth: 1440, py: 3 }}>
       <Stack
-        direction={{ xs: "column", md: "row" }}
+        direction={{ xs: 'column', md: 'row' }}
         spacing={2}
-        sx={{ alignItems: { xs: "stretch", md: "flex-end" }, mb: 2.5 }}
+        sx={{ alignItems: { xs: 'stretch', md: 'flex-end' }, mb: 2.5 }}
       >
         <Box sx={{ flex: 1 }}>
           <Typography
@@ -122,37 +128,22 @@ export default function App() {
         component="section"
         aria-label="Market workspace"
         sx={{
-          display: "grid",
+          display: 'grid',
           gridTemplateColumns: {
-            xs: "1fr",
-            lg: "400px minmax(0, 1fr)",
-            xl: "430px minmax(0, 1fr)",
+            xs: '1fr',
+            lg: '400px minmax(0, 1fr)',
+            xl: '430px minmax(0, 1fr)',
           },
           gap: 2.5,
         }}
       >
         <SearchPanel
-          itemType={itemType}
           listings={listings}
           listingError={listingError}
           listingState={listingState}
-          minSpreadForPercent={minSpreadForPercent}
-          rarity={rarity}
-          searchText={query}
-          selectedUuid={selectedUuid}
-          setItemType={setItemType}
-          setMinSpreadForPercent={setMinSpreadForPercent}
-          setRarity={setRarity}
-          setSearchText={setQuery}
-          setSelectedUuid={setSelectedUuid}
-          setSort={setSort}
-          sort={sort}
         />
 
-        <MarketDetail
-          selectedCatalogListing={selectedCatalogListing}
-          selectedUuid={selectedUuid}
-        />
+        {/* <MarketDetail /> */}
       </Box>
     </Container>
   );

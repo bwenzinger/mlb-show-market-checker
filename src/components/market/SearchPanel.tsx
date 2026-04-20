@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo } from 'react';
 import {
   Alert,
   Avatar,
@@ -17,7 +17,7 @@ import {
   TextField,
   Typography,
   type SelectChangeEvent,
-} from "@mui/material";
+} from '@mui/material';
 
 import {
   doesSortMetricUseQuickSell,
@@ -31,65 +31,43 @@ import {
   titleCase,
   type LoadState,
   sortOptions,
-} from "../../marketUtils";
-import type { ItemType, Listing, SortKey } from "../../showApi";
-import {
-  DebounceTextField,
-  ListLoadingState,
-  QuickSellBadge,
-} from "./common";
+  updateUrlParam,
+} from '../../marketUtils';
+import type { ItemType, Listing, SortKey } from '../../showApi';
+import { DebounceTextField, ListLoadingState, QuickSellBadge } from './common';
+import { useQueryParams } from './common/useQueryParams';
+import { FilterUrlParams } from '../../types';
 
 interface SearchPanelProps {
-  itemType: ItemType | "";
   listings: Listing[];
   listingError: string;
   listingState: LoadState;
-  minSpreadForPercent: number;
-  rarity: string;
-  searchText: string;
-  selectedUuid: string | null;
-  setItemType: (value: ItemType | "") => void;
-  setMinSpreadForPercent: (value: number) => void;
-  setRarity: (value: string) => void;
-  setSearchText: (value: string) => void;
-  setSelectedUuid: (value: string) => void;
-  setSort: (value: SortKey) => void;
-  sort: SortKey;
 }
 
-export const SearchPanel = memo(function SearchPanel({
-  itemType,
+export const SearchPanel = function SearchPanel({
   listings,
   listingError,
   listingState,
-  minSpreadForPercent,
-  rarity,
-  searchText,
-  selectedUuid,
-  setItemType,
-  setMinSpreadForPercent,
-  setRarity,
-  setSearchText,
-  setSelectedUuid,
-  setSort,
-  sort,
 }: SearchPanelProps) {
+  const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+
+  console.log('params: ', params);
   const showInitialLoadingState =
-    listingState === "loading" && listings.length === 0;
+    listingState === 'loading' && listings.length === 0;
   const showRefreshingOverlay =
-    listingState === "loading" && listings.length > 0;
+    listingState === 'loading' && listings.length > 0;
 
   return (
     <Paper
       component="aside"
       variant="outlined"
       sx={{
-        alignSelf: "start",
+        alignSelf: 'start',
         minWidth: 0,
         p: 2,
-        position: { lg: "sticky" },
+        position: { lg: 'sticky' },
         top: 16,
-        width: "100%",
+        width: '100%',
       }}
     >
       <Stack spacing={1.5}>
@@ -97,10 +75,14 @@ export const SearchPanel = memo(function SearchPanel({
           debounceMs={300}
           fullWidth
           label="Item"
-          onDebouncedChange={setSearchText}
+          onDebouncedChange={(value) => {
+            setQueryParams({
+              query: value,
+            });
+          }}
           placeholder="Search market items"
           type="search"
-          value={searchText}
+          value={params?.query ?? ''}
         />
 
         <FormControl fullWidth>
@@ -109,32 +91,36 @@ export const SearchPanel = memo(function SearchPanel({
             label="Type"
             labelId="item-type-label"
             onChange={(event: SelectChangeEvent) =>
-              setItemType(event.target.value as ItemType | "")
+              setQueryParams({
+                itemType: event.target.value as ItemType,
+              })
             }
-            value={itemType}
+            value={params?.itemType ?? ''}
           >
             {itemTypeOptions.map((option) => (
-              <MenuItem key={option.value || "all"} value={option.value}>
+              <MenuItem key={option.value || 'all'} value={option.value}>
                 {option.label}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
 
-        <Stack direction={{ xs: "column", sm: "row", lg: "row" }} spacing={1.5}>
+        <Stack direction={{ xs: 'column', sm: 'row', lg: 'row' }} spacing={1.5}>
           <FormControl fullWidth>
             <InputLabel id="rarity-label">Rarity</InputLabel>
             <Select
               label="Rarity"
               labelId="rarity-label"
               onChange={(event: SelectChangeEvent) =>
-                setRarity(event.target.value)
+                setQueryParams({
+                  rarity: event.target.value,
+                })
               }
-              value={rarity}
+              value={params?.rarity ?? ''}
             >
               {rarityOptions.map((option) => (
-                <MenuItem key={option || "all"} value={option}>
-                  {option ? titleCase(option) : "All"}
+                <MenuItem key={option || 'all'} value={option}>
+                  {option ? titleCase(option) : 'All'}
                 </MenuItem>
               ))}
             </Select>
@@ -146,9 +132,11 @@ export const SearchPanel = memo(function SearchPanel({
               label="Sort"
               labelId="sort-label"
               onChange={(event: SelectChangeEvent) =>
-                setSort(event.target.value as SortKey)
+                setQueryParams({
+                  sort: event.target.value as SortKey,
+                })
               }
-              value={sort}
+              value={params?.sort ?? ''}
             >
               {sortOptions.map((option) => (
                 <MenuItem key={option.value} value={option.value}>
@@ -159,26 +147,29 @@ export const SearchPanel = memo(function SearchPanel({
           </FormControl>
         </Stack>
 
-        {sort === "spread_percentage" ? (
+        {params?.sort === 'spread_percentage' ? (
           <TextField
             fullWidth
             inputProps={{ min: 0, step: 1 }}
             label="Minimum spread"
             onChange={(event) =>
-              setMinSpreadForPercent(
-                Math.max(Number(event.target.value) || 0, 0),
-              )
+              setQueryParams({
+                minSpreadForPercent: Math.max(
+                  Number(event.target.value) || 0,
+                  0
+                ).toString(),
+              })
             }
             type="number"
-            value={minSpreadForPercent}
+            value={params?.minSpreadForPercent ?? ''}
           />
         ) : null}
 
-        {listingState === "error" ? (
+        {listingState === 'error' ? (
           <Alert severity="error">{listingError}</Alert>
         ) : null}
 
-        <Box sx={{ position: "relative" }}>
+        <Box sx={{ position: 'relative' }}>
           {showInitialLoadingState ? (
             <ListLoadingState />
           ) : (
@@ -186,60 +177,65 @@ export const SearchPanel = memo(function SearchPanel({
               aria-label="Market listings"
               disablePadding
               sx={{
-                display: "flex",
-                flexDirection: "column",
+                display: 'flex',
+                flexDirection: 'column',
                 gap: 1,
-                maxHeight: { xs: 440, lg: "calc(100vh - 250px)" },
+                maxHeight: { xs: 440, lg: 'calc(100vh - 250px)' },
                 minHeight: 240,
-                overflow: "auto",
+                overflow: 'auto',
                 pr: 0.5,
               }}
             >
               {listings.map((listing, index) => {
                 const uuid = listing.item?.uuid;
-                const active = uuid === selectedUuid;
+                const active = uuid === params?.uuid;
                 const image =
                   listing.item?.baked_img ?? listing.item?.img ?? undefined;
-                const metric = getListingSortMetric(listing, sort);
+                const metric = getListingSortMetric(listing, params?.sort);
                 const showQuickSellBadge =
                   isUsingQuickSellFallback(listing) &&
-                  doesSortMetricUseQuickSell(sort);
+                  doesSortMetricUseQuickSell(params?.sort);
+
+                if (active) {
+                  console.log('found active item: ', active, uuid);
+                }
 
                 return (
                   <ListItemButton
                     disabled={!uuid}
-                    key={
-                      uuid ?? `${listing.listing_name ?? "listing"}-${index}`
-                    }
-                    onClick={() => uuid && setSelectedUuid(uuid)}
+                    key={uuid ?? `${listing.listing_name}`}
+                    // onClick={() => uuid && setSelectedUuid(uuid)}
+                    onClick={() => {
+                      updateUrlParam('uuid', uuid ?? null);
+                    }}
                     selected={active}
                     sx={{
-                      alignItems: "center",
+                      alignItems: 'center',
                       border: 1,
-                      borderColor: active ? "primary.main" : "divider",
+                      borderColor: active ? 'primary.main' : 'divider',
                       borderRadius: 1,
-                      display: "flex",
-                      flex: "0 0 auto",
+                      display: 'flex',
+                      flex: '0 0 auto',
                       gap: 1.25,
                       height: 72,
                       maxHeight: 72,
                       minHeight: 72,
-                      overflow: "hidden",
+                      overflow: 'hidden',
                       px: 1.5,
                       py: 1,
-                      width: "100%",
+                      width: '100%',
                     }}
                   >
-                    <ListItemAvatar sx={{ flex: "0 0 40px", minWidth: 40 }}>
+                    <ListItemAvatar sx={{ flex: '0 0 40px', minWidth: 40 }}>
                       <Avatar
                         src={image}
                         variant="square"
                         sx={{
-                          bgcolor: "background.default",
-                          objectFit: "contain",
+                          bgcolor: 'background.default',
+                          objectFit: 'contain',
                         }}
                       >
-                        {listing.listing_name?.charAt(0) ?? "?"}
+                        {listing.listing_name?.charAt(0) ?? '?'}
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
@@ -248,34 +244,34 @@ export const SearchPanel = memo(function SearchPanel({
                       secondary={getListingListSummary(listing)}
                       secondaryTypographyProps={{
                         noWrap: true,
-                        variant: "body2",
+                        variant: 'body2',
                       }}
                       sx={{
                         flex: 1,
                         m: 0,
                         minWidth: 0,
-                        "& .MuiListItemText-primary, & .MuiListItemText-secondary":
+                        '& .MuiListItemText-primary, & .MuiListItemText-secondary':
                           {
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
                           },
                       }}
                     />
                     <Box
                       sx={{
-                        flex: "0 0 auto",
+                        flex: '0 0 auto',
                         minWidth: 0,
-                        overflow: "hidden",
-                        textAlign: "right",
+                        overflow: 'hidden',
+                        textAlign: 'right',
                       }}
                     >
                       <Stack
                         direction="row"
                         spacing={0.5}
                         sx={{
-                          alignItems: "center",
-                          flexWrap: "nowrap",
-                          justifyContent: "flex-end",
+                          alignItems: 'center',
+                          flexWrap: 'nowrap',
+                          justifyContent: 'flex-end',
                           minWidth: 0,
                         }}
                       >
@@ -308,17 +304,17 @@ export const SearchPanel = memo(function SearchPanel({
               role="status"
               aria-live="polite"
               sx={{
-                alignItems: "center",
-                backdropFilter: "blur(2px)",
-                backgroundColor: "rgba(10, 15, 20, 0.58)",
+                alignItems: 'center',
+                backdropFilter: 'blur(2px)',
+                backgroundColor: 'rgba(10, 15, 20, 0.58)',
                 borderRadius: 1,
                 bottom: 0,
-                display: "flex",
-                flexDirection: "column",
+                display: 'flex',
+                flexDirection: 'column',
                 gap: 1,
                 inset: 0,
-                justifyContent: "center",
-                position: "absolute",
+                justifyContent: 'center',
+                position: 'absolute',
                 zIndex: 1,
               }}
             >
@@ -332,4 +328,4 @@ export const SearchPanel = memo(function SearchPanel({
       </Stack>
     </Paper>
   );
-});
+};
