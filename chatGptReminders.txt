@@ -27,6 +27,8 @@ Current snapshot (2026-04-20):
 - The hook now uses `useSyncExternalStore`, listens for `popstate`, patches `history.pushState` and `history.replaceState`, and returns stable params plus `setQueryParams`.
 - The hook only changes the returned params reference when the shallow key/value shape of the URL params changes.
 - `useQueryParams` and `updateQueryParams` now support a generic param shape so reads and updates can be typed by query-param keys.
+- `src/components/market/SearchPanel.tsx` now uses a custom fixed-row virtualized list instead of rendering every market listing row at once.
+- The search list virtualization uses a local scroll container, fixed row height, overscan, and automatic scrolling to keep the selected item visible.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 

@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Avatar,
@@ -6,7 +6,6 @@ import {
   CircularProgress,
   FormControl,
   InputLabel,
-  List,
   ListItemAvatar,
   ListItemButton,
   ListItemText,
@@ -21,22 +20,25 @@ import {
 
 import {
   doesSortMetricUseQuickSell,
-  formatStubs,
   getListingListSummary,
   getListingSortMetric,
-  isSpreadSort,
   isUsingQuickSellFallback,
   itemTypeOptions,
   rarityOptions,
   titleCase,
   type LoadState,
   sortOptions,
-  updateUrlParam,
 } from '../../marketUtils';
 import type { ItemType, Listing, SortKey } from '../../showApi';
 import { DebounceTextField, ListLoadingState, QuickSellBadge } from './common';
 import { useQueryParams } from './common/useQueryParams';
-import { FilterUrlParams } from '../../types';
+import type { FilterUrlParams } from '../../types';
+
+const LIST_ITEM_HEIGHT = 72;
+const LIST_ROW_GAP = 8;
+const LIST_ROW_HEIGHT = LIST_ITEM_HEIGHT + LIST_ROW_GAP;
+const LIST_OVERSCAN = 6;
+const MIN_LIST_HEIGHT = 240;
 
 interface SearchPanelProps {
   listings: Listing[];
@@ -50,12 +52,80 @@ export const SearchPanel = function SearchPanel({
   listingState,
 }: SearchPanelProps) {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(MIN_LIST_HEIGHT);
 
-  console.log('params: ', params);
   const showInitialLoadingState =
     listingState === 'loading' && listings.length === 0;
   const showRefreshingOverlay =
     listingState === 'loading' && listings.length > 0;
+  const activeSort = params?.sort;
+  const startIndex = Math.max(
+    Math.floor(scrollTop / LIST_ROW_HEIGHT) - LIST_OVERSCAN,
+    0
+  );
+  const endIndex = Math.min(
+    listings.length,
+    Math.ceil((scrollTop + viewportHeight) / LIST_ROW_HEIGHT) + LIST_OVERSCAN
+  );
+  const totalHeight =
+    listings.length > 0
+      ? listings.length * LIST_ROW_HEIGHT - LIST_ROW_GAP
+      : MIN_LIST_HEIGHT;
+  const visibleListings = listings.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    if (showInitialLoadingState) return;
+
+    const node = listRef.current;
+    if (!node) return;
+
+    const updateMeasurements = () => {
+      setViewportHeight(node.clientHeight || MIN_LIST_HEIGHT);
+      setScrollTop(node.scrollTop);
+    };
+
+    updateMeasurements();
+
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateMeasurements();
+    });
+
+    resizeObserver.observe(node);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [showInitialLoadingState]);
+
+  useEffect(() => {
+    const node = listRef.current;
+    if (!node) return;
+
+    const activeIndex = listings.findIndex(
+      (listing) => listing.item?.uuid === params?.uuid
+    );
+    if (activeIndex < 0) return;
+
+    const rowTop = activeIndex * LIST_ROW_HEIGHT;
+    const rowBottom = rowTop + LIST_ITEM_HEIGHT;
+    const viewportTop = node.scrollTop;
+    const viewportBottom = viewportTop + node.clientHeight;
+
+    if (rowTop < viewportTop) {
+      node.scrollTo({ top: rowTop });
+      return;
+    }
+
+    if (rowBottom > viewportBottom) {
+      node.scrollTo({
+        top: Math.max(rowBottom - node.clientHeight, 0),
+      });
+    }
+  }, [listings, params?.uuid]);
 
   return (
     <Paper
@@ -173,130 +243,144 @@ export const SearchPanel = function SearchPanel({
           {showInitialLoadingState ? (
             <ListLoadingState />
           ) : (
-            <List
+            <Box
               aria-label="Market listings"
-              disablePadding
+              onScroll={(event) => {
+                setScrollTop(event.currentTarget.scrollTop);
+              }}
+              ref={listRef}
+              role="list"
               sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1,
                 maxHeight: { xs: 440, lg: 'calc(100vh - 250px)' },
-                minHeight: 240,
+                minHeight: MIN_LIST_HEIGHT,
                 overflow: 'auto',
+                position: 'relative',
                 pr: 0.5,
               }}
             >
-              {listings.map((listing, index) => {
-                const uuid = listing.item?.uuid;
-                const active = uuid === params?.uuid;
-                const image =
-                  listing.item?.baked_img ?? listing.item?.img ?? undefined;
-                const metric = getListingSortMetric(listing, params?.sort);
-                const showQuickSellBadge =
-                  isUsingQuickSellFallback(listing) &&
-                  doesSortMetricUseQuickSell(params?.sort);
+              <Box sx={{ height: totalHeight, position: 'relative' }}>
+                {visibleListings.map((listing, visibleIndex) => {
+                  const index = startIndex + visibleIndex;
+                  const uuid = listing.item?.uuid;
+                  const active = uuid === params?.uuid;
+                  const image =
+                    listing.item?.baked_img ?? listing.item?.img ?? undefined;
+                  const metric = getListingSortMetric(listing, activeSort);
+                  const showQuickSellBadge =
+                    isUsingQuickSellFallback(listing) &&
+                    doesSortMetricUseQuickSell(activeSort);
 
-                if (active) {
-                  console.log('found active item: ', active, uuid);
-                }
-
-                return (
-                  <ListItemButton
-                    disabled={!uuid}
-                    key={uuid ?? `${listing.listing_name}`}
-                    // onClick={() => uuid && setSelectedUuid(uuid)}
-                    onClick={() => {
-                      updateUrlParam('uuid', uuid ?? null);
-                    }}
-                    selected={active}
-                    sx={{
-                      alignItems: 'center',
-                      border: 1,
-                      borderColor: active ? 'primary.main' : 'divider',
-                      borderRadius: 1,
-                      display: 'flex',
-                      flex: '0 0 auto',
-                      gap: 1.25,
-                      height: 72,
-                      maxHeight: 72,
-                      minHeight: 72,
-                      overflow: 'hidden',
-                      px: 1.5,
-                      py: 1,
-                      width: '100%',
-                    }}
-                  >
-                    <ListItemAvatar sx={{ flex: '0 0 40px', minWidth: 40 }}>
-                      <Avatar
-                        src={image}
-                        variant="square"
-                        sx={{
-                          bgcolor: 'background.default',
-                          objectFit: 'contain',
-                        }}
-                      >
-                        {listing.listing_name?.charAt(0) ?? '?'}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={listing.listing_name ?? listing.item?.name}
-                      primaryTypographyProps={{ fontWeight: 800, noWrap: true }}
-                      secondary={getListingListSummary(listing)}
-                      secondaryTypographyProps={{
-                        noWrap: true,
-                        variant: 'body2',
-                      }}
-                      sx={{
-                        flex: 1,
-                        m: 0,
-                        minWidth: 0,
-                        '& .MuiListItemText-primary, & .MuiListItemText-secondary':
-                          {
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          },
-                      }}
-                    />
+                  return (
                     <Box
+                      key={uuid ?? `${listing.listing_name}-${index}`}
+                      role="listitem"
                       sx={{
-                        flex: '0 0 auto',
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        textAlign: 'right',
+                        left: 0,
+                        position: 'absolute',
+                        right: 0,
+                        top: index * LIST_ROW_HEIGHT,
                       }}
                     >
-                      <Stack
-                        direction="row"
-                        spacing={0.5}
+                      <ListItemButton
+                        disabled={!uuid}
+                        onClick={() => {
+                          if (!uuid) return;
+
+                          setQueryParams({ uuid });
+                        }}
+                        selected={active}
                         sx={{
                           alignItems: 'center',
-                          flexWrap: 'nowrap',
-                          justifyContent: 'flex-end',
-                          minWidth: 0,
+                          border: 1,
+                          borderColor: active ? 'primary.main' : 'divider',
+                          borderRadius: 1,
+                          display: 'flex',
+                          gap: 1.25,
+                          height: LIST_ITEM_HEIGHT,
+                          maxHeight: LIST_ITEM_HEIGHT,
+                          minHeight: LIST_ITEM_HEIGHT,
+                          overflow: 'hidden',
+                          px: 1.5,
+                          py: 1,
+                          width: '100%',
                         }}
                       >
-                        <Typography
-                          color="secondary"
-                          fontWeight={900}
-                          noWrap
-                          sx={{ minWidth: 0 }}
+                        <ListItemAvatar sx={{ flex: '0 0 40px', minWidth: 40 }}>
+                          <Avatar
+                            src={image}
+                            variant="square"
+                            sx={{
+                              bgcolor: 'background.default',
+                              objectFit: 'contain',
+                            }}
+                          >
+                            {listing.listing_name?.charAt(0) ?? '?'}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={listing.listing_name ?? listing.item?.name}
+                          primaryTypographyProps={{
+                            fontWeight: 800,
+                            noWrap: true,
+                          }}
+                          secondary={getListingListSummary(listing)}
+                          secondaryTypographyProps={{
+                            noWrap: true,
+                            variant: 'body2',
+                          }}
+                          sx={{
+                            flex: 1,
+                            m: 0,
+                            minWidth: 0,
+                            '& .MuiListItemText-primary, & .MuiListItemText-secondary':
+                              {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              },
+                          }}
+                        />
+                        <Box
+                          sx={{
+                            flex: '0 0 auto',
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            textAlign: 'right',
+                          }}
                         >
-                          {metric.value}
-                        </Typography>
-                        {showQuickSellBadge ? <QuickSellBadge /> : null}
-                      </Stack>
-                      <Typography
-                        color="text.secondary"
-                        noWrap
-                        variant="caption"
-                      >
-                        {metric.label}
-                      </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={0.5}
+                            sx={{
+                              alignItems: 'center',
+                              flexWrap: 'nowrap',
+                              justifyContent: 'flex-end',
+                              minWidth: 0,
+                            }}
+                          >
+                            <Typography
+                              color="secondary"
+                              fontWeight={900}
+                              noWrap
+                              sx={{ minWidth: 0 }}
+                            >
+                              {metric.value}
+                            </Typography>
+                            {showQuickSellBadge ? <QuickSellBadge /> : null}
+                          </Stack>
+                          <Typography
+                            color="text.secondary"
+                            noWrap
+                            variant="caption"
+                          >
+                            {metric.label}
+                          </Typography>
+                        </Box>
+                      </ListItemButton>
                     </Box>
-                  </ListItemButton>
-                );
-              })}
-            </List>
+                  );
+                })}
+              </Box>
+            </Box>
           )}
 
           {showRefreshingOverlay ? (

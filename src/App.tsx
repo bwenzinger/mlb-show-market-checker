@@ -143,7 +143,7 @@ export default function App() {
           listingState={listingState}
         />
 
-        {/* <MarketDetail /> */}
+        <MarketDetail />
       </Box>
     </Container>
   );
