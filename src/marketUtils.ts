@@ -332,12 +332,10 @@ export function writeFiltersToUrl({
   }
 }
 
-export async function fetchSortedListings({
+export async function fetchListingsByTypeAndRarity({
   itemType,
-  minSpreadForPercent,
   name,
   rarity,
-  sort,
 }: {
   itemType?: ItemType | '';
   minSpreadForPercent?: number;
@@ -358,14 +356,7 @@ export async function fetchSortedListings({
         listingMatchesNormalizedSearch(listing, normalizedName))
   );
 
-  if (isSpreadSort(sort)) {
-    return sortListingsBySpread(
-      filterListingsForSpreadSort(matchingListings, sort, minSpreadForPercent),
-      sort
-    );
-  }
-
-  return sortListingsByStandardMetric(matchingListings, sort);
+  return matchingListings;
 }
 
 export function isSpreadSort(
@@ -651,7 +642,7 @@ function setSearchParam(
   }
 }
 
-function sortListingsByStandardMetric(
+export function sortListingsByStandardMetric(
   listings: Listing[],
   sort?: Exclude<
     SortKey,
@@ -797,6 +788,42 @@ function listingMatchesNormalizedSearch(
   );
 }
 
+function filterListingsByPriceRange(
+  listings: Listing[],
+  {
+    maxBuyNow,
+    maxSellNow,
+    minBuyNow,
+    minSellNow,
+  }: {
+    maxBuyNow?: number;
+    maxSellNow?: number;
+    minBuyNow?: number;
+    minSellNow?: number;
+  }
+): Listing[] {
+  return listings.filter((listing) => {
+    const prices = getListingPrices(listing);
+
+    return (
+      isWithinRange(prices.buyNow, minBuyNow, maxBuyNow) &&
+      isWithinRange(prices.sellNow, minSellNow, maxSellNow)
+    );
+  });
+}
+
+function isWithinRange(
+  value: number | null,
+  min?: number,
+  max?: number
+): boolean {
+  if (min === undefined && max === undefined) return true;
+  if (value === null) return false;
+  if (min !== undefined && value < min) return false;
+  if (max !== undefined && value > max) return false;
+  return true;
+}
+
 function normalizeSearchText(value: string): string {
   return value
     .normalize('NFKD')
@@ -810,7 +837,7 @@ function compactSearchText(value: string): string {
   return value.replace(/\s+/g, '');
 }
 
-function filterListingsForSpreadSort(
+export function filterListingsForSpreadSort(
   listings: Listing[],
   sort: SortKey,
   minSpreadForPercent?: number
@@ -824,7 +851,10 @@ function filterListingsForSpreadSort(
   });
 }
 
-function sortListingsBySpread(listings: Listing[], sort: SortKey): Listing[] {
+export function sortListingsBySpread(
+  listings: Listing[],
+  sort: SortKey
+): Listing[] {
   return listings.slice().sort((a, b) => {
     const aValue = listingSpreadSortValue(a, sort);
     const bValue = listingSpreadSortValue(b, sort);

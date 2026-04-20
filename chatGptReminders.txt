@@ -31,6 +31,10 @@ Current snapshot (2026-04-20):
 - The search list virtualization uses a local scroll container, fixed row height, overscan, and automatic scrolling to keep the selected item visible.
 - `src/marketUtils.ts` now passes `itemType` and `rarity` through to the paginated listings fetch so the app can reduce API requests when those filters are set.
 - When `itemType` is selected, market fetching now only requests that one type instead of all market item types.
+- `SearchPanel` now includes post-query price filters for min/max buy now and min/max sell now.
+- The new price filters are URL-backed query params and are applied locally in `fetchSortedListings` after the API response is received.
+- `App.tsx` was reorganized to fetch only when server-side inputs change, then reuse the current listings array for local transforms.
+- Min/max buy/sell filters are now applied in `App.tsx` before the local spread/standard sort step so price-only changes can reuse the existing list.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 

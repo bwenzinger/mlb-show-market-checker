@@ -40,6 +40,16 @@ const LIST_ROW_HEIGHT = LIST_ITEM_HEIGHT + LIST_ROW_GAP;
 const LIST_OVERSCAN = 6;
 const MIN_LIST_HEIGHT = 240;
 
+function toNonNegativeQueryValue(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) return undefined;
+
+  return String(Math.max(Math.trunc(parsed), 0));
+}
+
 interface SearchPanelProps {
   listings: Listing[];
   listingError: string;
@@ -234,6 +244,72 @@ export const SearchPanel = function SearchPanel({
             value={params?.minSpreadForPercent ?? ''}
           />
         ) : null}
+
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 1.5,
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+          }}
+        >
+          <Typography
+            color="text.secondary"
+            fontWeight={800}
+            sx={{ gridColumn: '1 / -1', letterSpacing: '0.04em' }}
+            textTransform="uppercase"
+            variant="caption"
+          >
+            Post-query price filters
+          </Typography>
+          <TextField
+            fullWidth
+            inputProps={{ min: 0, step: 1 }}
+            label="Min buy now"
+            onChange={(event) =>
+              setQueryParams({
+                minBuyNow: toNonNegativeQueryValue(event.target.value),
+              })
+            }
+            type="number"
+            value={params?.minBuyNow ?? ''}
+          />
+          <TextField
+            fullWidth
+            inputProps={{ min: 0, step: 1 }}
+            label="Max buy now"
+            onChange={(event) =>
+              setQueryParams({
+                maxBuyNow: toNonNegativeQueryValue(event.target.value),
+              })
+            }
+            type="number"
+            value={params?.maxBuyNow ?? ''}
+          />
+          <TextField
+            fullWidth
+            inputProps={{ min: 0, step: 1 }}
+            label="Min sell now"
+            onChange={(event) =>
+              setQueryParams({
+                minSellNow: toNonNegativeQueryValue(event.target.value),
+              })
+            }
+            type="number"
+            value={params?.minSellNow ?? ''}
+          />
+          <TextField
+            fullWidth
+            inputProps={{ min: 0, step: 1 }}
+            label="Max sell now"
+            onChange={(event) =>
+              setQueryParams({
+                maxSellNow: toNonNegativeQueryValue(event.target.value),
+              })
+            }
+            type="number"
+            value={params?.maxSellNow ?? ''}
+          />
+        </Box>
 
         {listingState === 'error' ? (
           <Alert severity="error">{listingError}</Alert>

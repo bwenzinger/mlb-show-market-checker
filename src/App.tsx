@@ -4,14 +4,40 @@ import { Box, Container, Stack, Typography } from '@mui/material';
 import { MarketDetail } from './components/market/Detail/MarketDetail';
 import { SearchPanel } from './components/market/SearchPanel';
 import {
-  fetchSortedListings,
   readFiltersFromUrl,
   type LoadState,
   writeFiltersToUrl,
+  fetchListingsByTypeAndRarity,
+  isSpreadSort,
+  sortListingsBySpread,
+  filterListingsForSpreadSort,
+  sortListingsByStandardMetric,
+  getListingPrices,
 } from './marketUtils';
 import type { Listing, SortKey } from './showApi';
 import { useQueryParams } from './components/market/common/useQueryParams';
 import { FilterUrlParams } from './types';
+
+function parseNonNegativeQueryNumber(
+  value: string | undefined
+): number | undefined {
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(parsed, 0) : undefined;
+}
+
+function isWithinRange(
+  value: number | null,
+  min?: number,
+  max?: number
+): boolean {
+  if (min === undefined && max === undefined) return true;
+  if (value === null) return false;
+  if (min !== undefined && value < min) return false;
+  if (max !== undefined && value > max) return false;
+  return true;
+}
 
 export default function App() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
@@ -23,13 +49,15 @@ export default function App() {
   // const [minSpreadForPercent, setMinSpreadForPercent] = useState(
   //   params?.minSpreadForPercent
   // );
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [allListings, setAllListings] = useState<Listing[]>([]);
+  const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [listingState, setListingState] = useState<LoadState>('idle');
   const [listingError, setListingError] = useState('');
   // const [selectedUuid, setSelectedUuid] = useState<string | null>(
   //   initialFilters.selectedUuid
   // );
   // const selectedUuidRef = useRef(selectedUuid);
+  const previousFetchRef = useRef<Partial<FilterUrlParams>>(null);
 
   // useEffect(() => {
   //   selectedUuidRef.current = selectedUuid;
@@ -53,20 +81,67 @@ export default function App() {
       setListingState((current) => (current === 'ready' ? 'ready' : 'loading'));
       setListingError('');
 
+      let needsNewFetch =
+        previousFetchRef?.current?.itemType !== params.itemType ||
+        previousFetchRef.current?.query !== params.query ||
+        previousFetchRef.current?.rarity !== params.rarity;
+
       try {
-        const nextListings = await fetchSortedListings({
-          itemType: params?.itemType,
-          minSpreadForPercent: params?.minSpreadForPercent
-            ? Number(params?.minSpreadForPercent)
-            : undefined,
-          name: params?.query ? params.query.trim() : undefined,
-          rarity: params?.rarity || undefined,
-          sort: params?.sort,
-        });
+        let nextListings = needsNewFetch
+          ? await fetchListingsByTypeAndRarity({
+              itemType: params?.itemType,
+              name: params?.query ? params.query.trim() : undefined,
+              rarity: params?.rarity || undefined,
+            })
+          : [...allListings]; // needs to be a new array
+
+        if (needsNewFetch) {
+          setAllListings(nextListings);
+          previousFetchRef.current = {
+            itemType: params?.itemType,
+            query: params?.query,
+            rarity: params?.rarity,
+          };
+        }
 
         if (!active) return;
 
-        setListings(nextListings);
+        nextListings = nextListings.filter((listing) => {
+          const prices = getListingPrices(listing);
+
+          return (
+            isWithinRange(
+              prices.buyNow,
+              parseNonNegativeQueryNumber(params?.minBuyNow),
+              parseNonNegativeQueryNumber(params?.maxBuyNow)
+            ) &&
+            isWithinRange(
+              prices.sellNow,
+              parseNonNegativeQueryNumber(params?.minSellNow),
+              parseNonNegativeQueryNumber(params?.maxSellNow)
+            )
+          );
+        });
+
+        if (isSpreadSort(params?.sort)) {
+          nextListings = sortListingsBySpread(
+            filterListingsForSpreadSort(
+              nextListings,
+              params?.sort,
+              params?.minSpreadForPercent
+                ? Number(params?.minSpreadForPercent)
+                : undefined
+            ),
+            params?.sort
+          );
+        } else {
+          nextListings = sortListingsByStandardMetric(
+            nextListings,
+            params?.sort
+          );
+        }
+
+        setFilteredListings(nextListings);
         setListingState('ready');
 
         const firstUuid = nextListings[0]?.item?.uuid;
@@ -82,20 +157,25 @@ export default function App() {
       } catch (error) {
         if (!active) return;
 
-        setListings([]);
+        setFilteredListings([]);
+        setAllListings([]);
         setListingState('error');
         setListingError(error instanceof Error ? error.message : String(error));
       }
     }
 
-    void loadListings();
+    loadListings();
 
     return () => {
       active = false;
     };
   }, [
     params?.itemType,
+    params?.maxBuyNow,
+    params?.maxSellNow,
+    params?.minBuyNow,
     params?.minSpreadForPercent,
+    params?.minSellNow,
     params?.query,
     params?.rarity,
     params?.sort,
@@ -138,7 +218,7 @@ export default function App() {
         }}
       >
         <SearchPanel
-          listings={listings}
+          listings={filteredListings}
           listingError={listingError}
           listingState={listingState}
         />
