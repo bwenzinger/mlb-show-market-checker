@@ -339,14 +339,17 @@ export async function fetchSortedListings({
   rarity,
   sort,
 }: {
-  itemType?: ItemType;
+  itemType?: ItemType | '';
   minSpreadForPercent?: number;
   name?: string;
   rarity?: string;
   sort?: SortKey;
 }): Promise<Listing[]> {
   const normalizedName = normalizeSearchText(name ?? '');
-  const allListings = await fetchAllListings();
+  const allListings = await fetchAllListings({
+    itemType,
+    rarity,
+  });
   const matchingListings = allListings.filter(
     (listing) =>
       listingMatchesItemType(listing, itemType) &&
@@ -696,21 +699,37 @@ function listingStandardSortValue(
   return toNumber(listing.item?.['new_rank'] ?? listing.item?.ovr);
 }
 
-async function fetchAllListings(): Promise<Listing[]> {
+async function fetchAllListings({
+  itemType,
+  rarity,
+}: {
+  itemType?: ItemType | '';
+  rarity?: string;
+} = {}): Promise<Listing[]> {
+  const listingTypes: ItemType[] = itemType ? [itemType] : MARKET_ITEM_TYPES;
   const allListings = await mapWithConcurrency(
-    MARKET_ITEM_TYPES,
-    MARKET_ITEM_TYPES.length,
-    fetchAllListingsForType
+    listingTypes,
+    listingTypes.length,
+    (type) =>
+      fetchAllListingsForType(type, {
+        rarity,
+      })
   );
 
   return allListings.flat();
 }
 
 async function fetchAllListingsForType(
-  type: (typeof MARKET_ITEM_TYPES)[number]
+  type: (typeof MARKET_ITEM_TYPES)[number],
+  {
+    rarity,
+  }: {
+    rarity?: string;
+  } = {}
 ): Promise<Listing[]> {
   const firstResponse = await fetchListings({
     page: 1,
+    rarity,
     sort: 'rank',
     order: 'desc',
     type,
@@ -731,6 +750,7 @@ async function fetchAllListingsForType(
     async (page) => {
       const response = await fetchListings({
         page,
+        rarity,
         sort: 'rank',
         order: 'desc',
         type,

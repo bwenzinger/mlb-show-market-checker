@@ -29,6 +29,8 @@ Current snapshot (2026-04-20):
 - `useQueryParams` and `updateQueryParams` now support a generic param shape so reads and updates can be typed by query-param keys.
 - `src/components/market/SearchPanel.tsx` now uses a custom fixed-row virtualized list instead of rendering every market listing row at once.
 - The search list virtualization uses a local scroll container, fixed row height, overscan, and automatic scrolling to keep the selected item visible.
+- `src/marketUtils.ts` now passes `itemType` and `rarity` through to the paginated listings fetch so the app can reduce API requests when those filters are set.
+- When `itemType` is selected, market fetching now only requests that one type instead of all market item types.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 
