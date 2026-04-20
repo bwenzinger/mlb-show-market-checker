@@ -33,7 +33,11 @@ import {
   sortOptions,
 } from "../../marketUtils";
 import type { ItemType, Listing, SortKey } from "../../showApi";
-import { DebounceTextField, ListLoadingState, QuickSellBadge } from "./Common";
+import {
+  DebounceTextField,
+  ListLoadingState,
+  QuickSellBadge,
+} from "./common";
 
 interface SearchPanelProps {
   itemType: ItemType | "";

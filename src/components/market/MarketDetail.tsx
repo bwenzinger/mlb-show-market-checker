@@ -52,7 +52,7 @@ import {
   ProfitMetric,
   QuickSellBadge,
   SectionHeading,
-} from "./Common";
+} from "./common";
 
 interface MarketDetailProps {
   selectedCatalogListing: Listing | null;
