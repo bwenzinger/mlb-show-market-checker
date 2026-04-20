@@ -78,13 +78,16 @@ export default function App() {
     let active = true;
 
     async function loadListings() {
-      setListingState((current) => (current === 'ready' ? 'ready' : 'loading'));
       setListingError('');
 
       let needsNewFetch =
         previousFetchRef?.current?.itemType !== params.itemType ||
         previousFetchRef.current?.query !== params.query ||
         previousFetchRef.current?.rarity !== params.rarity;
+
+      setListingState((current) =>
+        current === 'ready' && !needsNewFetch ? 'ready' : 'loading'
+      );
 
       try {
         let nextListings = needsNewFetch
