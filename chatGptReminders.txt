@@ -1,0 +1,32 @@
+NOTE: Update this file with all noteworthy information based on changes we make.
+
+Project: mlb-show-market-checker
+Purpose: Running project notes for future ChatGPT/Codex sessions.
+
+Current snapshot (2026-04-20):
+- Frontend stack: React 19, TypeScript, Vite, Material UI.
+- Useful scripts: `npm run dev`, `npm run typecheck`, `npm run build`.
+- Shared market UI components were split out of `src/components/market/Common.tsx`.
+- Shared components now live in `src/components/market/common/`.
+- `src/components/market/common/index.ts` is the barrel file used by market components.
+- `src/components/market/SearchPanel.tsx` imports shared components from `./common`.
+- `src/components/market/MarketDetail.tsx` imports shared components from `./common`.
+- `src/components/market/Common.tsx` was removed.
+- New shared component files:
+  - `src/components/market/common/DebounceTextField.tsx`
+  - `src/components/market/common/ListLoadingState.tsx`
+  - `src/components/market/common/MetricCard.tsx`
+  - `src/components/market/common/QuickSellBadge.tsx`
+  - `src/components/market/common/ProfitMetric.tsx`
+  - `src/components/market/common/SectionHeading.tsx`
+  - `src/components/market/common/ChartCard.tsx`
+- Verification after the split:
+  - `npm run typecheck` passed.
+  - `npm run build` passed.
+- Existing build note:
+  - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
+
+Reminder for future updates:
+- Add the date of each notable change.
+- Record what changed, where it changed, and how it was verified.
+- Capture ongoing risks, TODOs, or non-obvious project decisions.
