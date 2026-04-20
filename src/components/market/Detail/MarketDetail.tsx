@@ -57,6 +57,7 @@ import { FilterUrlParams } from '../../../types';
 
 export function MarketDetail() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+  const [refreshKey, setRefreshKey] = useState(0);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [storedCompletedOrders, setStoredCompletedOrders] = useState<
     CompletedOrder[] | null
@@ -76,7 +77,7 @@ export function MarketDetail() {
 
   useEffect(() => {
     setCompletedOrderPage(0);
-  }, [params?.uuid]);
+  }, [params?.uuid, refreshKey]);
 
   useEffect(() => {
     if (!params?.uuid) {
@@ -190,7 +191,7 @@ export function MarketDetail() {
         window.clearTimeout(allOrdersTimeoutId);
       }
     };
-  }, [params?.uuid]);
+  }, [params?.uuid, refreshKey]);
 
   const detailListing = selectedListing;
   const priceHistory = useMemo(
@@ -321,6 +322,12 @@ export function MarketDetail() {
       setCompletedOrderPage={setCompletedOrderPage}
       setCompletedOrderRowsPerPage={setCompletedOrderRowsPerPage}
       usesQuickSellFallback={usesQuickSellFallback}
+      onRefresh={() => {
+        if (!params?.uuid || detailState === 'loading') return;
+
+        setRefreshKey((current) => current + 1);
+      }}
+      refreshDisabled={!params?.uuid || detailState === 'loading'}
     />
   );
 }

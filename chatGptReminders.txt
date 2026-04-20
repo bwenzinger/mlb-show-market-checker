@@ -35,6 +35,8 @@ Current snapshot (2026-04-20):
 - The new price filters are URL-backed query params and are applied locally in `fetchSortedListings` after the API response is received.
 - `App.tsx` was reorganized to fetch only when server-side inputs change, then reuse the current listings array for local transforms.
 - Min/max buy/sell filters are now applied in `App.tsx` before the local spread/standard sort step so price-only changes can reuse the existing list.
+- `MarketDetail` now has a local Refresh button in the detail header.
+- The detail refresh is driven by local component state in `MarketDetail`, so it reloads the selected detail page and order history without retriggering the whole list fetch in `App.tsx`.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 

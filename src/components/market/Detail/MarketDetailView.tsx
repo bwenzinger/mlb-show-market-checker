@@ -1,4 +1,12 @@
-import { Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material';
 import {
   formatStubs,
   getListingDetailSummary,
@@ -46,6 +54,8 @@ interface MarketDetailViewProps {
   setCompletedOrderPage: (value: number) => void;
   setCompletedOrderRowsPerPage: (value: number) => void;
   usesQuickSellFallback: boolean;
+  onRefresh: () => void;
+  refreshDisabled: boolean;
 }
 
 export function MarketDetailView({
@@ -80,6 +90,8 @@ export function MarketDetailView({
   setCompletedOrderPage,
   setCompletedOrderRowsPerPage,
   usesQuickSellFallback,
+  onRefresh,
+  refreshDisabled,
 }: MarketDetailViewProps) {
   const recentOrdersMeta =
     recentOrdersState === 'loading' &&
@@ -146,11 +158,24 @@ export function MarketDetailView({
             </Typography>
           </Box>
 
-          <Chip
-            color={detailState === 'loading' ? 'default' : 'primary'}
-            label={detailState === 'loading' ? 'Refreshing...' : 'Live API'}
-            variant="outlined"
-          />
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Chip
+              color={detailState === 'loading' ? 'default' : 'primary'}
+              label={detailState === 'loading' ? 'Refreshing...' : 'Live API'}
+              variant="outlined"
+            />
+            <Button
+              disabled={refreshDisabled}
+              onClick={onRefresh}
+              size="small"
+              variant="outlined"
+              sx={{
+                textTransform: 'none',
+              }}
+            >
+              Refresh
+            </Button>
+          </Stack>
         </Stack>
 
         <Box
