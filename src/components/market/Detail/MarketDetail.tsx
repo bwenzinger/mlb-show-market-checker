@@ -272,13 +272,23 @@ export function MarketDetail() {
     () => detailListing !== null && isUsingQuickSellFallback(detailListing),
     [detailListing]
   );
-  const allTimePeak = useMemo(() => {
-    const prices = priceHistory.flatMap((point) => [point.buy, point.sell]);
-    const numericPrices = prices.filter(
-      (price): price is number => price !== null
+  const sevenDayTrend = useMemo(() => {
+    if (priceHistory.length < 2) return null;
+
+    const latestPoint = priceHistory[priceHistory.length - 1];
+    const windowStart = latestPoint.date.getTime() - 7 * 24 * 60 * 60 * 1000;
+    const buyNowPoints = priceHistory.filter(
+      (point) => point.date.getTime() >= windowStart && point.sell !== null
     );
 
-    return numericPrices.length > 0 ? Math.max(...numericPrices) : null;
+    if (buyNowPoints.length < 2) return null;
+
+    const firstValue = buyNowPoints[0]?.sell;
+    const lastValue = buyNowPoints[buyNowPoints.length - 1]?.sell;
+
+    if (firstValue === null || lastValue === null) return null;
+
+    return lastValue - firstValue;
   }, [priceHistory]);
   const allTimeAverage = useMemo(() => {
     if (allCompletedOrders.length === 0) return null;
@@ -330,7 +340,7 @@ export function MarketDetail() {
       detailState={detailState}
       allTimeAverage={allTimeAverage}
       buyNowVsAllTimeAverageDiff={buyNowVsAllTimeAverageDiff}
-      allTimePeak={allTimePeak}
+      sevenDayTrend={sevenDayTrend}
       earliestAllOrder={earliestAllOrder}
       latestAllOrder={latestAllOrder}
       orderBuckets={orderBuckets}

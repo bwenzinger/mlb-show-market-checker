@@ -41,7 +41,7 @@ interface MarketDetailViewProps {
   detailState: LoadState;
   allTimeAverage: number | null;
   buyNowVsAllTimeAverageDiff: number | null;
-  allTimePeak: number | null;
+  sevenDayTrend: number | null;
   earliestAllOrder: string;
   latestAllOrder: string;
   orderBuckets: OrderBucket[];
@@ -78,7 +78,7 @@ export function MarketDetailView({
   detailState,
   allTimeAverage,
   buyNowVsAllTimeAverageDiff,
-  allTimePeak,
+  sevenDayTrend,
   earliestAllOrder,
   latestAllOrder,
   orderBuckets,
@@ -231,7 +231,12 @@ export function MarketDetailView({
             label="All time average"
             value={formatStubs(allTimeAverage)}
           />
-          <MetricCard label="All time peak" value={formatStubs(allTimePeak)} />
+          <MetricCard
+            label="7-day trend"
+            value={`${sevenDayTrend && sevenDayTrend > 0 ? '+' : ''}${formatStubs(
+              sevenDayTrend
+            )}`}
+          />
         </Box>
 
         {usesQuickSellFallback ? (
