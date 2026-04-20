@@ -39,9 +39,10 @@ interface MarketDetailViewProps {
   currentSpread: number | null;
   detailError: string;
   detailState: LoadState;
+  allTimeAverage: number | null;
+  buyNowVsAllTimeAverageDiff: number | null;
+  allTimePeak: number | null;
   earliestAllOrder: string;
-  earliestDaily: string;
-  earliestOrder: string;
   latestAllOrder: string;
   orderBuckets: OrderBucket[];
   paginatedAllCompletedOrders: OrderPoint[];
@@ -75,9 +76,10 @@ export function MarketDetailView({
   currentSpread,
   detailError,
   detailState,
+  allTimeAverage,
+  buyNowVsAllTimeAverageDiff,
+  allTimePeak,
   earliestAllOrder,
-  earliestDaily,
-  earliestOrder,
   latestAllOrder,
   orderBuckets,
   paginatedAllCompletedOrders,
@@ -108,6 +110,20 @@ export function MarketDetailView({
   const showRecentOrdersFallbackNotice =
     recentOrdersState === 'error' &&
     completedOrdersSource === 'Live API sample';
+  const allTimeAverageDiffLabel =
+    buyNowVsAllTimeAverageDiff === null
+      ? null
+      : `current ${buyNowVsAllTimeAverageDiff > 0 ? '+' : ''}${formatStubs(
+          buyNowVsAllTimeAverageDiff
+        )}`;
+  const allTimeAverageDiffColor =
+    buyNowVsAllTimeAverageDiff === null
+      ? 'text.secondary'
+      : buyNowVsAllTimeAverageDiff > 0
+        ? 'success.main'
+        : buyNowVsAllTimeAverageDiff < 0
+          ? 'error.main'
+          : 'text.secondary';
 
   return (
     <Paper
@@ -200,8 +216,22 @@ export function MarketDetailView({
             profitPercentage={currentProfitPercentage}
           />
           <MetricCard label="Spread" value={formatStubs(currentSpread)} />
-          <MetricCard label="Daily history starts" value={earliestDaily} />
-          <MetricCard label="Granular orders start" value={earliestOrder} />
+          <MetricCard
+            badge={
+              allTimeAverageDiffLabel ? (
+                <Typography
+                  color={allTimeAverageDiffColor}
+                  fontWeight={800}
+                  variant="caption"
+                >
+                  {allTimeAverageDiffLabel}
+                </Typography>
+              ) : null
+            }
+            label="All time average"
+            value={formatStubs(allTimeAverage)}
+          />
+          <MetricCard label="All time peak" value={formatStubs(allTimePeak)} />
         </Box>
 
         {usesQuickSellFallback ? (

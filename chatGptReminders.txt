@@ -37,6 +37,9 @@ Current snapshot (2026-04-20):
 - Min/max buy/sell filters are now applied in `App.tsx` before the local spread/standard sort step so price-only changes can reuse the existing list.
 - `MarketDetail` now has a local Refresh button in the detail header.
 - The detail refresh is driven by local component state in `MarketDetail`, so it reloads the selected detail page and order history without retriggering the whole list fetch in `App.tsx`.
+- The Market Detail summary cards now show `All time peak` and `All time average` instead of the old history-start date cards.
+- `All time peak` is derived from the daily price history series, and `All time average` is derived from the all-orders dataset currently shown in detail view.
+- The `All time average` card now also shows a signed `buy now vs avg` difference badge, colored by whether the current buy-now price is above or below the all-time average.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 
