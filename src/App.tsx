@@ -6,6 +6,7 @@ import { SearchPanel } from './components/market/SearchPanel';
 import {
   type LoadState,
   fetchListingsByTypeAndRarity,
+  getDefaultSortDirection,
   isSpreadSort,
   sortListingsBySpread,
   filterListingsForSpreadSort,
@@ -16,6 +17,7 @@ import {
   fetchStoredOrderAverages,
   type Listing,
   type StoredOrderAverage,
+  type SortOrder,
 } from './showApi';
 import { useQueryParams } from './components/market/common/useQueryParams';
 import { FilterUrlParams } from './types';
@@ -43,6 +45,7 @@ function isWithinRange(
 
 export default function App() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+  const sortDirection: SortOrder = params?.sortDirection ?? getDefaultSortDirection(params?.sort);
   // const initialFilters = useMemo(readFiltersFromUrl, []);
   // const [query, setQuery] = useState(initialFilters.searchText);
   // const [itemType, setItemType] = useState(initialFilters.itemType);
@@ -161,12 +164,14 @@ export default function App() {
                 ? Number(params?.minSpreadForPercent)
                 : undefined
             ),
-            params?.sort
+            params?.sort,
+            sortDirection
           );
         } else {
           nextListings = sortListingsByStandardMetric(
             nextListings,
-            params?.sort
+            params?.sort,
+            sortDirection
           );
         }
 
@@ -208,6 +213,7 @@ export default function App() {
     params?.query,
     params?.rarity,
     params?.sort,
+    params?.sortDirection,
   ]);
 
   return (

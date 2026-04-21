@@ -7,6 +7,7 @@ import {
   type Listing,
   type ListingPriceHistoryPoint,
   type SortKey,
+  type SortOrder,
 } from './showApi';
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -660,9 +661,10 @@ export function sortListingsByStandardMetric(
   sort?: Exclude<
     SortKey,
     'spread_number' | 'spread_percentage' | 'profit' | 'profit_percentage'
-  >
+  >,
+  sortDirection?: SortOrder
 ): Listing[] {
-  const direction = sortOrderFor(sort) === 'asc' ? 1 : -1;
+  const direction = resolveSortDirection(sort, sortDirection) === 'asc' ? 1 : -1;
 
   return listings.slice().sort((a, b) => {
     const aValue = listingStandardSortValue(a, sort);
@@ -870,8 +872,12 @@ export function filterListingsForSpreadSort(
 
 export function sortListingsBySpread(
   listings: Listing[],
-  sort: SortKey
+  sort: SortKey,
+  sortDirection?: SortOrder
 ): Listing[] {
+  const direction =
+    resolveSortDirection(sort, sortDirection) === 'asc' ? 1 : -1;
+
   return listings.slice().sort((a, b) => {
     const aValue = listingSpreadSortValue(a, sort);
     const bValue = listingSpreadSortValue(b, sort);
@@ -881,8 +887,9 @@ export function sortListingsBySpread(
     if (bValue === null) return -1;
 
     return (
-      bValue - aValue ||
-      (getListingPrices(b).buyNow ?? 0) - (getListingPrices(a).buyNow ?? 0) ||
+      (aValue - bValue) * direction ||
+      ((getListingPrices(a).buyNow ?? 0) - (getListingPrices(b).buyNow ?? 0)) *
+        direction ||
       (a.listing_name ?? '').localeCompare(b.listing_name ?? '')
     );
   });
@@ -1001,7 +1008,14 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function sortOrderFor(sort?: SortKey): 'asc' | 'desc' {
+export function getDefaultSortDirection(sort?: SortKey): SortOrder {
   if (sort === 'best_sell_price') return 'asc';
   return 'desc';
+}
+
+export function resolveSortDirection(
+  sort?: SortKey,
+  sortDirection?: SortOrder
+): SortOrder {
+  return sortDirection ?? getDefaultSortDirection(sort);
 }

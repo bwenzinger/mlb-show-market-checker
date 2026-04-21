@@ -1,4 +1,4 @@
-import { ItemType, SortKey } from './showApi';
+import { ItemType, SortKey, SortOrder } from './showApi';
 
 export interface FilterUrlParams {
   itemType?: ItemType;
@@ -10,5 +10,6 @@ export interface FilterUrlParams {
   query?: string;
   rarity?: string;
   sort?: SortKey;
+  sortDirection?: SortOrder;
   uuid?: string;
 }

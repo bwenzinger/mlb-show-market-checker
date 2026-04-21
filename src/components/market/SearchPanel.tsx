@@ -7,6 +7,7 @@ import {
   CircularProgress,
   Drawer,
   FormControl,
+  IconButton,
   InputLabel,
   ListItemAvatar,
   ListItemButton,
@@ -15,7 +16,9 @@ import {
   Paper,
   Select,
   Stack,
+  SvgIcon,
   TextField,
+  Tooltip,
   Typography,
   type SelectChangeEvent,
 } from '@mui/material';
@@ -27,11 +30,12 @@ import {
   isUsingQuickSellFallback,
   itemTypeOptions,
   rarityOptions,
+  resolveSortDirection,
   titleCase,
   type LoadState,
   sortOptions,
 } from '../../marketUtils';
-import type { ItemType, Listing, SortKey } from '../../showApi';
+import type { ItemType, Listing, SortKey, SortOrder } from '../../showApi';
 import { DebounceTextField, ListLoadingState, QuickSellBadge } from './common';
 import { useQueryParams } from './common/useQueryParams';
 import type { FilterUrlParams } from '../../types';
@@ -132,6 +136,21 @@ function PriceFiltersFields({
   );
 }
 
+function SortDirectionIcon({ direction }: { direction: SortOrder }) {
+  return (
+    <SvgIcon
+      sx={{
+        fontSize: 18,
+        transform: direction === 'asc' ? 'rotate(180deg)' : 'none',
+        transition: 'transform 120ms ease',
+      }}
+      viewBox="0 0 24 24"
+    >
+      <path d="M11 5h2v10.17l3.59-3.58L18 13l-6 6-6-6 1.41-1.41L11 15.17V5z" />
+    </SvgIcon>
+  );
+}
+
 export const SearchPanel = function SearchPanel({
   listings,
   listingError,
@@ -148,6 +167,11 @@ export const SearchPanel = function SearchPanel({
   const showRefreshingOverlay =
     listingState === 'loading' && listings.length > 0;
   const activeSort = params?.sort;
+  const activeSortDirection = resolveSortDirection(
+    params?.sort,
+    params?.sortDirection
+  );
+  const nextSortDirection = activeSortDirection === 'desc' ? 'asc' : 'desc';
   const startIndex = Math.max(
     Math.floor(scrollTop / LIST_ROW_HEIGHT) - LIST_OVERSCAN,
     0
@@ -318,25 +342,58 @@ export const SearchPanel = function SearchPanel({
             </Select>
           </FormControl>
 
-          <FormControl fullWidth>
-            <InputLabel id="sort-label">Sort</InputLabel>
-            <Select
-              label="Sort"
-              labelId="sort-label"
-              onChange={(event: SelectChangeEvent) =>
-                setQueryParams({
-                  sort: event.target.value as SortKey,
-                })
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flex: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel id="sort-label">Sort</InputLabel>
+              <Select
+                label="Sort"
+                labelId="sort-label"
+                onChange={(event: SelectChangeEvent) =>
+                  setQueryParams({
+                    sort: event.target.value as SortKey,
+                  })
+                }
+                value={params?.sort ?? ''}
+              >
+                {sortOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Tooltip
+              placement="top"
+              title={
+                activeSortDirection === 'desc'
+                  ? 'Sorting descending. Click for ascending.'
+                  : 'Sorting ascending. Click for descending.'
               }
-              value={params?.sort ?? ''}
             >
-              {sortOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              <IconButton
+                aria-label={`Sorting ${activeSortDirection}. Click to sort ${nextSortDirection}.`}
+                color="primary"
+                onClick={() =>
+                  setQueryParams({
+                    sortDirection: nextSortDirection,
+                  })
+                }
+                size="small"
+                sx={{
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1.5,
+                  flexShrink: 0,
+                  height: 40,
+                  mt: { xs: 1, sm: 0 },
+                  width: 40,
+                }}
+              >
+                <SortDirectionIcon direction={activeSortDirection} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
         </Stack>
 
         {params?.sort === 'spread_percentage' ? (
