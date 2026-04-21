@@ -62,7 +62,7 @@ export default function App() {
   //   initialFilters.selectedUuid
   // );
   // const selectedUuidRef = useRef(selectedUuid);
-  const previousFetchRef = useRef<Partial<FilterUrlParams>>(null);
+  const previousFetchRef = useRef<Partial<FilterUrlParams> | null>(null);
 
   // useEffect(() => {
   //   selectedUuidRef.current = selectedUuid;
@@ -85,10 +85,12 @@ export default function App() {
     async function loadListings() {
       setListingError('');
 
-      let needsNewFetch =
-        previousFetchRef?.current?.itemType !== params.itemType ||
-        previousFetchRef.current?.query !== params.query ||
-        previousFetchRef.current?.rarity !== params.rarity;
+      const previousFetch = previousFetchRef.current;
+      const needsNewFetch =
+        previousFetch === null ||
+        previousFetch.itemType !== params.itemType ||
+        previousFetch.query !== params.query ||
+        previousFetch.rarity !== params.rarity;
 
       setListingState((current) =>
         current === 'ready' && !needsNewFetch ? 'ready' : 'loading'

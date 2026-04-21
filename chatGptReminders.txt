@@ -48,6 +48,7 @@ Current snapshot (2026-04-20):
 - `src/server/marketServer.ts` warms the average cache once if the table is empty, reads `/api/cards/averages` directly from the cache table, and refreshes each card's cached average after collection or on-demand detail refreshes insert new orders.
 - 2026-04-21: `MarketDetail` now reads the selected card's all-time average through the cached average API instead of recomputing it from the long all-orders dataset.
 - Future player/card average-price features should use the same `market_card_averages` table via the cached average endpoints (`/api/cards/averages` or `/api/cards/:uuid/average`) so list, detail, sorting, and any new average-price UI stay consistent.
+- 2026-04-21: Fixed the initial market-list fetch guard in `App.tsx`; an empty URL with no `itemType`, `query`, or `rarity` now still performs the first server fetch instead of reusing the empty initial list.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 
