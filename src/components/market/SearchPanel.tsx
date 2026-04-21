@@ -3,7 +3,9 @@ import {
   Alert,
   Avatar,
   Box,
+  Button,
   CircularProgress,
+  Drawer,
   FormControl,
   InputLabel,
   ListItemAvatar,
@@ -15,6 +17,8 @@ import {
   Stack,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
   type SelectChangeEvent,
 } from '@mui/material';
 
@@ -56,15 +60,92 @@ interface SearchPanelProps {
   listingState: LoadState;
 }
 
+interface PriceFiltersFieldsProps {
+  maxBuyNow?: string;
+  maxSellNow?: string;
+  minBuyNow?: string;
+  minSellNow?: string;
+  onMaxBuyNowChange: (value: string | undefined) => void;
+  onMaxSellNowChange: (value: string | undefined) => void;
+  onMinBuyNowChange: (value: string | undefined) => void;
+  onMinSellNowChange: (value: string | undefined) => void;
+}
+
+function PriceFiltersFields({
+  maxBuyNow,
+  maxSellNow,
+  minBuyNow,
+  minSellNow,
+  onMaxBuyNowChange,
+  onMaxSellNowChange,
+  onMinBuyNowChange,
+  onMinSellNowChange,
+}: PriceFiltersFieldsProps) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gap: 1.5,
+        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+      }}
+    >
+      <Typography
+        color="text.secondary"
+        fontWeight={800}
+        sx={{ gridColumn: '1 / -1', letterSpacing: '0.04em' }}
+        textTransform="uppercase"
+        variant="caption"
+      >
+        Post-query price filters
+      </Typography>
+      <TextField
+        fullWidth
+        inputProps={{ min: 0, step: 1 }}
+        label="Min buy now"
+        onChange={(event) => onMinBuyNowChange(toNonNegativeQueryValue(event.target.value))}
+        type="number"
+        value={minBuyNow ?? ''}
+      />
+      <TextField
+        fullWidth
+        inputProps={{ min: 0, step: 1 }}
+        label="Max buy now"
+        onChange={(event) => onMaxBuyNowChange(toNonNegativeQueryValue(event.target.value))}
+        type="number"
+        value={maxBuyNow ?? ''}
+      />
+      <TextField
+        fullWidth
+        inputProps={{ min: 0, step: 1 }}
+        label="Min sell now"
+        onChange={(event) => onMinSellNowChange(toNonNegativeQueryValue(event.target.value))}
+        type="number"
+        value={minSellNow ?? ''}
+      />
+      <TextField
+        fullWidth
+        inputProps={{ min: 0, step: 1 }}
+        label="Max sell now"
+        onChange={(event) => onMaxSellNowChange(toNonNegativeQueryValue(event.target.value))}
+        type="number"
+        value={maxSellNow ?? ''}
+      />
+    </Box>
+  );
+}
+
 export const SearchPanel = function SearchPanel({
   listings,
   listingError,
   listingState,
 }: SearchPanelProps) {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+  const theme = useTheme();
+  const showFiltersDrawer = useMediaQuery(theme.breakpoints.down('md'));
   const listRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(MIN_LIST_HEIGHT);
+  const [isFiltersDrawerOpen, setIsFiltersDrawerOpen] = useState(false);
 
   const showInitialLoadingState =
     listingState === 'loading' && listings.length === 0;
@@ -84,6 +165,12 @@ export const SearchPanel = function SearchPanel({
       ? listings.length * LIST_ROW_HEIGHT - LIST_ROW_GAP
       : MIN_LIST_HEIGHT;
   const visibleListings = listings.slice(startIndex, endIndex);
+  const activePriceFilterCount = [
+    params?.minBuyNow,
+    params?.maxBuyNow,
+    params?.minSellNow,
+    params?.maxSellNow,
+  ].filter(Boolean).length;
 
   useEffect(() => {
     if (showInitialLoadingState) return;
@@ -136,6 +223,41 @@ export const SearchPanel = function SearchPanel({
       });
     }
   }, [listings, params?.uuid]);
+
+  useEffect(() => {
+    if (!showFiltersDrawer && isFiltersDrawerOpen) {
+      setIsFiltersDrawerOpen(false);
+    }
+  }, [isFiltersDrawerOpen, showFiltersDrawer]);
+
+  const priceFiltersContent = (
+    <PriceFiltersFields
+      maxBuyNow={params?.maxBuyNow}
+      maxSellNow={params?.maxSellNow}
+      minBuyNow={params?.minBuyNow}
+      minSellNow={params?.minSellNow}
+      onMaxBuyNowChange={(value) => {
+        setQueryParams({
+          maxBuyNow: value,
+        });
+      }}
+      onMaxSellNowChange={(value) => {
+        setQueryParams({
+          maxSellNow: value,
+        });
+      }}
+      onMinBuyNowChange={(value) => {
+        setQueryParams({
+          minBuyNow: value,
+        });
+      }}
+      onMinSellNowChange={(value) => {
+        setQueryParams({
+          minSellNow: value,
+        });
+      }}
+    />
+  );
 
   return (
     <Paper
@@ -245,71 +367,54 @@ export const SearchPanel = function SearchPanel({
           />
         ) : null}
 
-        <Box
-          sx={{
-            display: 'grid',
-            gap: 1.5,
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-          }}
-        >
-          <Typography
-            color="text.secondary"
-            fontWeight={800}
-            sx={{ gridColumn: '1 / -1', letterSpacing: '0.04em' }}
-            textTransform="uppercase"
-            variant="caption"
-          >
-            Post-query price filters
-          </Typography>
-          <TextField
-            fullWidth
-            inputProps={{ min: 0, step: 1 }}
-            label="Min buy now"
-            onChange={(event) =>
-              setQueryParams({
-                minBuyNow: toNonNegativeQueryValue(event.target.value),
-              })
-            }
-            type="number"
-            value={params?.minBuyNow ?? ''}
-          />
-          <TextField
-            fullWidth
-            inputProps={{ min: 0, step: 1 }}
-            label="Max buy now"
-            onChange={(event) =>
-              setQueryParams({
-                maxBuyNow: toNonNegativeQueryValue(event.target.value),
-              })
-            }
-            type="number"
-            value={params?.maxBuyNow ?? ''}
-          />
-          <TextField
-            fullWidth
-            inputProps={{ min: 0, step: 1 }}
-            label="Min sell now"
-            onChange={(event) =>
-              setQueryParams({
-                minSellNow: toNonNegativeQueryValue(event.target.value),
-              })
-            }
-            type="number"
-            value={params?.minSellNow ?? ''}
-          />
-          <TextField
-            fullWidth
-            inputProps={{ min: 0, step: 1 }}
-            label="Max sell now"
-            onChange={(event) =>
-              setQueryParams({
-                maxSellNow: toNonNegativeQueryValue(event.target.value),
-              })
-            }
-            type="number"
-            value={params?.maxSellNow ?? ''}
-          />
-        </Box>
+        {showFiltersDrawer ? (
+          <>
+            <Button
+              onClick={() => setIsFiltersDrawerOpen(true)}
+              sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
+              variant="outlined"
+            >
+              {activePriceFilterCount > 0
+                ? `Filters (${activePriceFilterCount})`
+                : 'Filters'}
+            </Button>
+
+            <Drawer
+              anchor="right"
+              onClose={() => setIsFiltersDrawerOpen(false)}
+              open={isFiltersDrawerOpen}
+            >
+              <Stack
+                spacing={2}
+                sx={{
+                  p: 2,
+                  width: { xs: 'min(100vw, 360px)', sm: 360 },
+                }}
+              >
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Typography fontWeight={900} variant="h6">
+                    Filters
+                  </Typography>
+                  <Button
+                    onClick={() => setIsFiltersDrawerOpen(false)}
+                    size="small"
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Close
+                  </Button>
+                </Stack>
+
+                {priceFiltersContent}
+              </Stack>
+            </Drawer>
+          </>
+        ) : (
+          priceFiltersContent
+        )}
 
         {listingState === 'error' ? (
           <Alert severity="error">{listingError}</Alert>

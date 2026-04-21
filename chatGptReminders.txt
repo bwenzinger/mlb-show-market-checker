@@ -33,6 +33,7 @@ Current snapshot (2026-04-20):
 - When `itemType` is selected, market fetching now only requests that one type instead of all market item types.
 - `SearchPanel` now includes post-query price filters for min/max buy now and min/max sell now.
 - The new price filters are URL-backed query params and are applied locally in `fetchSortedListings` after the API response is received.
+- On smaller layouts, the post-query price filters now move behind a `Filters` button in `SearchPanel` that opens a right-side drawer to save space.
 - `App.tsx` was reorganized to fetch only when server-side inputs change, then reuse the current listings array for local transforms.
 - Min/max buy/sell filters are now applied in `App.tsx` before the local spread/standard sort step so price-only changes can reuse the existing list.
 - `MarketDetail` now has a local Refresh button in the detail header.
