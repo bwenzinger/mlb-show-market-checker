@@ -35,12 +35,13 @@ import {
   type OrderPoint,
   type PricePoint,
 } from '../../../marketUtils';
-import { calculateRobustAverage } from '../../../orderStats';
 import {
   fetchListingByUuid,
+  fetchStoredOrderAverage,
   fetchStoredCompletedOrders,
   type CompletedOrder,
   type Listing,
+  type StoredOrderAverage,
 } from '../../../showApi';
 import { CompletedOrderTimelineChart, OrderChart, PriceChart } from '../Charts';
 import {
@@ -66,6 +67,8 @@ export function MarketDetail() {
   const [storedAllCompletedOrders, setStoredAllCompletedOrders] = useState<
     CompletedOrder[] | null
   >(null);
+  const [storedOrderAverage, setStoredOrderAverage] =
+    useState<StoredOrderAverage | null>(null);
   const [detailState, setDetailState] = useState<LoadState>('idle');
   const [detailError, setDetailError] = useState('');
   const [recentOrdersState, setRecentOrdersState] = useState<LoadState>('idle');
@@ -85,6 +88,7 @@ export function MarketDetail() {
       setSelectedListing(null);
       setStoredCompletedOrders(null);
       setStoredAllCompletedOrders(null);
+      setStoredOrderAverage(null);
       setDetailState('idle');
       setDetailError('');
       setRecentOrdersState('idle');
@@ -100,6 +104,7 @@ export function MarketDetail() {
     setSelectedListing(null);
     setStoredCompletedOrders(null);
     setStoredAllCompletedOrders(null);
+    setStoredOrderAverage(null);
     setDetailState('loading');
     setDetailError('');
     setRecentOrdersState('idle');
@@ -163,6 +168,25 @@ export function MarketDetail() {
       }
     }
 
+    async function loadAverage() {
+      if (!params?.uuid) {
+        return;
+      }
+
+      try {
+        const average = await fetchStoredOrderAverage({
+          uuid: params.uuid,
+        });
+        if (!active) return;
+
+        setStoredOrderAverage(average);
+      } catch {
+        if (!active) return;
+
+        setStoredOrderAverage(null);
+      }
+    }
+
     async function loadDetail() {
       if (!params?.uuid) return;
       try {
@@ -171,6 +195,7 @@ export function MarketDetail() {
 
         setSelectedListing(listing);
         setDetailState('ready');
+        void loadAverage();
         void loadRecentOrders();
         allOrdersTimeoutId = window.setTimeout(() => {
           if (!active) return;
@@ -291,11 +316,7 @@ export function MarketDetail() {
 
     return lastValue - firstValue;
   }, [priceHistory]);
-  const allTimeAverage = useMemo(() => {
-    return calculateRobustAverage(
-      allCompletedOrders.map((order) => order.price)
-    );
-  }, [allCompletedOrders]);
+  const allTimeAverage = storedOrderAverage?.averagePrice ?? null;
   const buyNowVsAllTimeAverageDiff = useMemo(() => {
     if (allTimeAverage === null || bestSell === null) return null;
 

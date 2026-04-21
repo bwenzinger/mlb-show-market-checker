@@ -46,6 +46,8 @@ Current snapshot (2026-04-20):
 - The market list now has an explicit asc/desc sort-direction icon button next to the sort dropdown, backed by a `sortDirection` query param and shared local sort helpers.
 - 2026-04-21: The backend now stores robust all-time order averages in a persistent `market_card_averages` SQLite table instead of recomputing every average during `/api/cards/averages` page loads.
 - `src/server/marketServer.ts` warms the average cache once if the table is empty, reads `/api/cards/averages` directly from the cache table, and refreshes each card's cached average after collection or on-demand detail refreshes insert new orders.
+- 2026-04-21: `MarketDetail` now reads the selected card's all-time average through the cached average API instead of recomputing it from the long all-orders dataset.
+- Future player/card average-price features should use the same `market_card_averages` table via the cached average endpoints (`/api/cards/averages` or `/api/cards/:uuid/average`) so list, detail, sorting, and any new average-price UI stay consistent.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 

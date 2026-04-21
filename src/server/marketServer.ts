@@ -224,7 +224,10 @@ const selectCachedAveragesStmt = db.prepare(`
 `);
 
 const selectCachedAverageStmt = db.prepare(`
-  SELECT 1
+  SELECT
+    uuid,
+    average_price AS averagePrice,
+    order_count AS orderCount
   FROM market_card_averages
   WHERE uuid = ?
 `);
@@ -352,6 +355,18 @@ function startHttpServer() {
     }>;
 
     res.json({ source: "local-db-cache", averages: rows });
+  });
+
+  app.get("/api/cards/:uuid/average", (req, res) => {
+    const row = selectCachedAverageStmt.get(req.params.uuid) as
+      | {
+          averagePrice: number | null;
+          orderCount: number;
+          uuid: string;
+        }
+      | undefined;
+
+    res.json({ source: "local-db-cache", average: row ?? null });
   });
 
   app.post("/api/collect", async (req, res) => {

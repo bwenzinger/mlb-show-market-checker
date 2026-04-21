@@ -213,6 +213,39 @@ export async function fetchStoredOrderAverages({
   return promise;
 }
 
+export async function fetchStoredOrderAverage({
+  uuid,
+}: {
+  uuid: string;
+}): Promise<StoredOrderAverage | null> {
+  if (!HISTORY_API_ENABLED) {
+    return null;
+  }
+
+  const url = new URL(
+    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
+      uuid
+    )}/average`,
+    window.location.href
+  );
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Local history API returned HTTP ${response.status}`);
+  }
+
+  const json = (await response.json()) as {
+    average?: StoredOrderAverage | null;
+  };
+
+  return json.average ?? null;
+}
+
 async function requestJson<T>(
   path: string,
   searchParams: Record<string, string | number | undefined> = {},
