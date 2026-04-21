@@ -273,6 +273,27 @@ function startHttpServer() {
     res.json({ source: "local-db", days, orders: rows });
   });
 
+  app.get("/api/cards/averages", (_req, res) => {
+    const rows = db
+      .prepare(
+        `
+          SELECT
+            uuid,
+            AVG(price) AS averagePrice,
+            COUNT(*) AS orderCount
+          FROM stored_completed_orders
+          GROUP BY uuid
+        `,
+      )
+      .all() as Array<{
+        averagePrice: number | null;
+        orderCount: number;
+        uuid: string;
+      }>;
+
+    res.json({ source: "local-db", averages: rows });
+  });
+
   app.post("/api/collect", async (req, res) => {
     try {
       const limit = clampOptionalInt(req.query.limit ?? req.body?.limit);

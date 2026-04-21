@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, Container, Stack, Typography } from '@mui/material';
 
 import { MarketDetail } from './components/market/Detail/MarketDetail';
 import { SearchPanel } from './components/market/SearchPanel';
 import {
-  readFiltersFromUrl,
   type LoadState,
-  writeFiltersToUrl,
   fetchListingsByTypeAndRarity,
   isSpreadSort,
   sortListingsBySpread,
@@ -14,7 +12,11 @@ import {
   sortListingsByStandardMetric,
   getListingPrices,
 } from './marketUtils';
-import type { Listing, SortKey } from './showApi';
+import {
+  fetchStoredOrderAverages,
+  type Listing,
+  type StoredOrderAverage,
+} from './showApi';
 import { useQueryParams } from './components/market/common/useQueryParams';
 import { FilterUrlParams } from './types';
 
@@ -90,13 +92,37 @@ export default function App() {
       );
 
       try {
-        let nextListings = needsNewFetch
-          ? await fetchListingsByTypeAndRarity({
+        let nextListings: Listing[];
+
+        if (needsNewFetch) {
+          const [fetchedListings, storedOrderAverages] = await Promise.all([
+            fetchListingsByTypeAndRarity({
               itemType: params?.itemType,
               name: params?.query ? params.query.trim() : undefined,
               rarity: params?.rarity || undefined,
-            })
-          : [...allListings]; // needs to be a new array
+            }),
+            fetchStoredOrderAverages().catch(
+              () => new Map<string, StoredOrderAverage>()
+            ),
+          ]);
+
+          nextListings = fetchedListings.map((listing) => {
+            const uuid = listing.item?.uuid;
+            const average = uuid
+              ? storedOrderAverages.get(uuid)?.averagePrice ?? null
+              : null;
+            const buyNow = getListingPrices(listing).buyNow;
+
+            return {
+              ...listing,
+              allTimeAverage: average,
+              buyNowVsAllTimeAverageDiff:
+                average === null || buyNow === null ? null : buyNow - average,
+            };
+          });
+        } else {
+          nextListings = [...allListings];
+        }
 
         if (needsNewFetch) {
           setAllListings(nextListings);
@@ -150,7 +176,7 @@ export default function App() {
         const firstUuid = nextListings[0]?.item?.uuid;
         // const currentSelectedUuid = selectedUuidRef.current;
         const selectedUuidStillVisible = nextListings.some(
-          (listing) => listing.item?.uuid === params.uuid
+          (listing: Listing) => listing.item?.uuid === params.uuid
         );
 
         if (firstUuid && (!params.uuid || !selectedUuidStillVisible)) {

@@ -17,8 +17,6 @@ import {
   Stack,
   TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
   type SelectChangeEvent,
 } from '@mui/material';
 
@@ -140,8 +138,6 @@ export const SearchPanel = function SearchPanel({
   listingState,
 }: SearchPanelProps) {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
-  const theme = useTheme();
-  const showFiltersDrawer = useMediaQuery(theme.breakpoints.down('md'));
   const listRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(MIN_LIST_HEIGHT);
@@ -223,12 +219,6 @@ export const SearchPanel = function SearchPanel({
       });
     }
   }, [listings, params?.uuid]);
-
-  useEffect(() => {
-    if (!showFiltersDrawer && isFiltersDrawerOpen) {
-      setIsFiltersDrawerOpen(false);
-    }
-  }, [isFiltersDrawerOpen, showFiltersDrawer]);
 
   const priceFiltersContent = (
     <PriceFiltersFields
@@ -367,54 +357,48 @@ export const SearchPanel = function SearchPanel({
           />
         ) : null}
 
-        {showFiltersDrawer ? (
-          <>
-            <Button
-              onClick={() => setIsFiltersDrawerOpen(true)}
-              sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
-              variant="outlined"
-            >
-              {activePriceFilterCount > 0
-                ? `Filters (${activePriceFilterCount})`
-                : 'Filters'}
-            </Button>
+        <Button
+          onClick={() => setIsFiltersDrawerOpen(true)}
+          sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
+          variant="outlined"
+        >
+          {activePriceFilterCount > 0
+            ? `Filters (${activePriceFilterCount})`
+            : 'Filters'}
+        </Button>
 
-            <Drawer
-              anchor="right"
-              onClose={() => setIsFiltersDrawerOpen(false)}
-              open={isFiltersDrawerOpen}
+        <Drawer
+          anchor="right"
+          onClose={() => setIsFiltersDrawerOpen(false)}
+          open={isFiltersDrawerOpen}
+        >
+          <Stack
+            spacing={2}
+            sx={{
+              p: 2,
+              width: { xs: 'min(100vw, 360px)', sm: 360 },
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: 'center', justifyContent: 'space-between' }}
             >
-              <Stack
-                spacing={2}
-                sx={{
-                  p: 2,
-                  width: { xs: 'min(100vw, 360px)', sm: 360 },
-                }}
+              <Typography fontWeight={900} variant="h6">
+                Filters
+              </Typography>
+              <Button
+                onClick={() => setIsFiltersDrawerOpen(false)}
+                size="small"
+                sx={{ textTransform: 'none' }}
               >
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <Typography fontWeight={900} variant="h6">
-                    Filters
-                  </Typography>
-                  <Button
-                    onClick={() => setIsFiltersDrawerOpen(false)}
-                    size="small"
-                    sx={{ textTransform: 'none' }}
-                  >
-                    Close
-                  </Button>
-                </Stack>
+                Close
+              </Button>
+            </Stack>
 
-                {priceFiltersContent}
-              </Stack>
-            </Drawer>
-          </>
-        ) : (
-          priceFiltersContent
-        )}
+            {priceFiltersContent}
+          </Stack>
+        </Drawer>
 
         {listingState === 'error' ? (
           <Alert severity="error">{listingError}</Alert>

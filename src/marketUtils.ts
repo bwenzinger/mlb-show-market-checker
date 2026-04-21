@@ -58,6 +58,7 @@ export const itemTypeOptions: Array<{ label: string; value: ItemType | '' }> = [
 export const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: 'Buy now', value: 'best_sell_price' },
   { label: 'Sell now', value: 'best_buy_price' },
+  { label: 'Buy now vs avg', value: 'buy_now_vs_all_time_average_diff' },
   { label: 'Spread', value: 'spread_number' },
   { label: 'Spread %', value: 'spread_percentage' },
   { label: 'Profit', value: 'profit' },
@@ -384,6 +385,18 @@ export function getListingSortMetric(
 ): { label: string; value: string } {
   const prices = getListingPrices(listing);
 
+  if (sort === 'buy_now_vs_all_time_average_diff') {
+    const diff = listing.buyNowVsAllTimeAverageDiff ?? null;
+
+    return {
+      label: 'vs avg',
+      value:
+        diff === null
+          ? formatStubs(null)
+          : `${diff > 0 ? '+' : ''}${formatStubs(diff)}`,
+    };
+  }
+
   if (sort === 'best_buy_price') {
     return { label: 'Sell now', value: formatStubs(prices.sellNow) };
   }
@@ -679,6 +692,10 @@ function listingStandardSortValue(
     'spread_number' | 'spread_percentage' | 'profit' | 'profit_percentage'
   >
 ): number | null {
+  if (sort === 'buy_now_vs_all_time_average_diff') {
+    return listing.buyNowVsAllTimeAverageDiff ?? null;
+  }
+
   if (sort === 'best_sell_price') {
     return getListingPrices(listing).buyNow;
   }
@@ -984,7 +1001,7 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function sortOrderFor(sort?: ApiSortKey): 'asc' | 'desc' {
+function sortOrderFor(sort?: SortKey): 'asc' | 'desc' {
   if (sort === 'best_sell_price') return 'asc';
   return 'desc';
 }

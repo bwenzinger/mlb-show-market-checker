@@ -16,6 +16,7 @@ export const MARKET_ITEM_TYPES: ItemType[] = [
 export type ApiSortKey = "rank" | "best_sell_price" | "best_buy_price";
 export type SortKey =
   | ApiSortKey
+  | "buy_now_vs_all_time_average_diff"
   | "spread_number"
   | "spread_percentage"
   | "profit"
@@ -56,12 +57,20 @@ export interface CompletedOrder {
 }
 
 export interface Listing {
+  allTimeAverage?: number | null;
+  buyNowVsAllTimeAverageDiff?: number | null;
   listing_name?: string | null;
   best_sell_price?: number | string | null;
   best_buy_price?: number | string | null;
   item?: ShowItem | null;
   price_history?: ListingPriceHistoryPoint[];
   completed_orders?: CompletedOrder[];
+}
+
+export interface StoredOrderAverage {
+  averagePrice: number | null;
+  orderCount: number;
+  uuid: string;
 }
 
 export interface ListingsResponse {
@@ -85,6 +94,11 @@ const HISTORY_API_BASE =
     ? `${trimTrailingSlash(BACKEND_API_BASE)}/api`
     : "/api");
 const HISTORY_API_ENABLED = import.meta.env.VITE_HISTORY_API_ENABLED !== "false";
+const STORED_ORDER_AVERAGES_CACHE_MS = 60_000;
+let storedOrderAveragesCache: {
+  expiresAt: number;
+  promise: Promise<Map<string, StoredOrderAverage>>;
+} | null = null;
 
 export async function fetchListings({
   page = 1,
@@ -146,6 +160,57 @@ export async function fetchStoredCompletedOrders({
 
   const json = (await response.json()) as { orders?: CompletedOrder[] };
   return json.orders ?? [];
+}
+
+export async function fetchStoredOrderAverages({
+  forceRefresh = false,
+}: {
+  forceRefresh?: boolean;
+} = {}): Promise<Map<string, StoredOrderAverage>> {
+  if (!HISTORY_API_ENABLED) {
+    return new Map();
+  }
+
+  const now = Date.now();
+  if (
+    !forceRefresh &&
+    storedOrderAveragesCache &&
+    storedOrderAveragesCache.expiresAt > now
+  ) {
+    return storedOrderAveragesCache.promise;
+  }
+
+  const promise = (async () => {
+    const url = new URL(
+      `${trimTrailingSlash(HISTORY_API_BASE)}/cards/averages`,
+      window.location.href
+    );
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Local history API returned HTTP ${response.status}`);
+    }
+
+    const json = (await response.json()) as {
+      averages?: StoredOrderAverage[];
+    };
+
+    return new Map(
+      (json.averages ?? []).map((average) => [average.uuid, average])
+    );
+  })();
+
+  storedOrderAveragesCache = {
+    expiresAt: now + STORED_ORDER_AVERAGES_CACHE_MS,
+    promise,
+  };
+
+  return promise;
 }
 
 async function requestJson<T>(
