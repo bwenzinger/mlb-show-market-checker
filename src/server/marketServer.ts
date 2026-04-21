@@ -50,6 +50,11 @@ interface NormalizedOrder {
   rawJson: string;
 }
 
+interface OrderPriceRow {
+  price: number;
+  uuid: string;
+}
+
 type SqlParams = Record<string, string | number | null>;
 const MARKET_ITEM_TYPES: ItemType[] = [
   "mlb_card",
@@ -102,6 +107,14 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_stored_completed_orders_uuid_time
     ON stored_completed_orders(uuid, order_time);
+
+  CREATE TABLE IF NOT EXISTS market_card_averages (
+    uuid TEXT PRIMARY KEY,
+    average_price REAL,
+    order_count INTEGER NOT NULL,
+    computed_at TEXT NOT NULL,
+    FOREIGN KEY (uuid) REFERENCES market_cards(uuid)
+  );
 
   CREATE TABLE IF NOT EXISTS collector_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,6 +214,62 @@ const finishRunStmt = db.prepare(`
   WHERE id = @id
 `);
 
+const selectCachedAveragesStmt = db.prepare(`
+  SELECT
+    uuid,
+    average_price AS averagePrice,
+    order_count AS orderCount
+  FROM market_card_averages
+  ORDER BY uuid ASC
+`);
+
+const selectCachedAverageStmt = db.prepare(`
+  SELECT 1
+  FROM market_card_averages
+  WHERE uuid = ?
+`);
+
+const selectAllOrderPricesStmt = db.prepare(`
+  SELECT
+    uuid,
+    price
+  FROM stored_completed_orders
+  ORDER BY uuid ASC
+`);
+
+const selectOrderPricesForUuidStmt = db.prepare(`
+  SELECT price
+  FROM stored_completed_orders
+  WHERE uuid = ?
+`);
+
+const upsertCachedAverageStmt = db.prepare(`
+  INSERT INTO market_card_averages (
+    uuid,
+    average_price,
+    order_count,
+    computed_at
+  ) VALUES (
+    @uuid,
+    @average_price,
+    @order_count,
+    @computed_at
+  )
+  ON CONFLICT(uuid) DO UPDATE SET
+    average_price = excluded.average_price,
+    order_count = excluded.order_count,
+    computed_at = excluded.computed_at
+`);
+
+const deleteCachedAverageStmt = db.prepare(`
+  DELETE FROM market_card_averages
+  WHERE uuid = ?
+`);
+
+const deleteCachedAveragesStmt = db.prepare(`
+  DELETE FROM market_card_averages
+`);
+
 let collectionInFlight: Promise<CollectionStats> | null = null;
 
 async function main() {
@@ -212,6 +281,7 @@ async function main() {
     return;
   }
 
+  warmAverageCacheIfEmpty();
   startHttpServer();
   void collectOnce({ limit: cliOptions.limit }).catch((error) => {
     console.error("Initial collection failed:", error);
@@ -275,40 +345,13 @@ function startHttpServer() {
   });
 
   app.get("/api/cards/averages", (_req, res) => {
-    const rawRows = db
-      .prepare(
-        `
-          SELECT
-            uuid,
-            price
-          FROM stored_completed_orders
-          ORDER BY uuid ASC, price ASC
-        `,
-      )
-      .all() as Array<{
-        price: number;
-        uuid: string;
-      }>;
+    const rows = selectCachedAveragesStmt.all() as Array<{
+      averagePrice: number | null;
+      orderCount: number;
+      uuid: string;
+    }>;
 
-    const pricesByUuid = new Map<string, number[]>();
-
-    for (const row of rawRows) {
-      const prices = pricesByUuid.get(row.uuid);
-
-      if (prices) {
-        prices.push(row.price);
-      } else {
-        pricesByUuid.set(row.uuid, [row.price]);
-      }
-    }
-
-    const rows = [...pricesByUuid.entries()].map(([uuid, prices]) => ({
-      averagePrice: calculateRobustAverage(prices),
-      orderCount: prices.length,
-      uuid,
-    }));
-
-    res.json({ source: "local-db", averages: rows });
+    res.json({ source: "local-db-cache", averages: rows });
   });
 
   app.post("/api/collect", async (req, res) => {
@@ -393,7 +436,9 @@ async function sendShowListingJson(req: Request, res: Response) {
     );
 
     try {
-      const stats = persistListingDetail(detail, new Date().toISOString());
+      const capturedAt = new Date().toISOString();
+      const stats = persistListingDetail(detail, capturedAt);
+      refreshAverageCacheAfterPersist(detail, stats.ordersInserted, capturedAt);
       res.setHeader("X-Market-Orders-Seen", String(stats.ordersSeen));
       res.setHeader("X-Market-Orders-Inserted", String(stats.ordersInserted));
     } catch (error) {
@@ -481,7 +526,13 @@ async function runCollection({ limit }: CollectionOptions): Promise<CollectionSt
         const detail = await fetchListingByUuid(uuid);
         stats.listingRequests += 1;
 
-        const listingStats = persistListingDetail(detail, new Date().toISOString());
+        const capturedAt = new Date().toISOString();
+        const listingStats = persistListingDetail(detail, capturedAt);
+        refreshAverageCacheAfterPersist(
+          detail,
+          listingStats.ordersInserted,
+          capturedAt,
+        );
         stats.ordersSeen += listingStats.ordersSeen;
         stats.ordersInserted += listingStats.ordersInserted;
       } catch (error) {
@@ -586,6 +637,100 @@ function persistListingDetail(
     ordersInserted,
     ordersSeen: normalizedOrders.length,
   };
+}
+
+function refreshAverageCacheAfterPersist(
+  listing: Listing,
+  ordersInserted: number,
+  computedAt: string,
+) {
+  const uuid = listing.item?.uuid;
+  if (!uuid) return;
+
+  if (ordersInserted > 0 || !hasCachedAverage(uuid)) {
+    refreshCachedAverageForUuid(uuid, computedAt);
+  }
+}
+
+function warmAverageCacheIfEmpty() {
+  if (
+    countTable("market_card_averages") > 0 ||
+    countTable("stored_completed_orders") === 0
+  ) {
+    return;
+  }
+
+  const startedAt = Date.now();
+  console.log("Building cached order averages...");
+  const refreshedCount = rebuildAverageCache(new Date().toISOString());
+  console.log(
+    `Cached ${refreshedCount} order average(s) in ${Math.round(
+      (Date.now() - startedAt) / 1000,
+    )} second(s).`,
+  );
+}
+
+function rebuildAverageCache(computedAt: string): number {
+  let currentUuid: string | null = null;
+  let prices: number[] = [];
+  let refreshedCount = 0;
+
+  withTransaction(() => {
+    deleteCachedAveragesStmt.run();
+
+    const orderPriceRows =
+      selectAllOrderPricesStmt.iterate() as Iterable<OrderPriceRow>;
+
+    for (const row of orderPriceRows) {
+      if (currentUuid !== null && row.uuid !== currentUuid) {
+        upsertCachedAverage(currentUuid, prices, computedAt);
+        refreshedCount += 1;
+        prices = [];
+      }
+
+      currentUuid = row.uuid;
+      prices.push(row.price);
+    }
+
+    if (currentUuid !== null) {
+      upsertCachedAverage(currentUuid, prices, computedAt);
+      refreshedCount += 1;
+    }
+  });
+
+  return refreshedCount;
+}
+
+function refreshCachedAverageForUuid(uuid: string, computedAt: string) {
+  const prices = (
+    selectOrderPricesForUuidStmt.all(uuid) as Array<{ price: number }>
+  ).map((row) => row.price);
+
+  if (prices.length === 0) {
+    deleteCachedAverageStmt.run(uuid);
+    return;
+  }
+
+  upsertCachedAverage(uuid, prices, computedAt);
+}
+
+function upsertCachedAverage(
+  uuid: string,
+  prices: number[],
+  computedAt: string,
+) {
+  upsertCachedAverageStmt.run(
+    toSqlParams({
+      uuid,
+      average_price: calculateRobustAverage(prices),
+      order_count: prices.length,
+      computed_at: computedAt,
+    }),
+  );
+}
+
+function hasCachedAverage(uuid: string): boolean {
+  return selectCachedAverageStmt.get(uuid) !== undefined;
 }
 
 function upsertMarketCard(listing: Listing, updatedAt: string) {
@@ -773,6 +918,7 @@ function finishRun(
 
 function getCounts() {
   return {
+    averages: countTable("market_card_averages"),
     cards: countTable("market_cards"),
     orders: countTable("stored_completed_orders"),
     runs: countTable("collector_runs"),

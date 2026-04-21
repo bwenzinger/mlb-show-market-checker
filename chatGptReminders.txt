@@ -44,6 +44,8 @@ Current snapshot (2026-04-20):
 - The backend `/api/cards/averages` endpoint now removes outlier trade prices with an IQR-based robust-average calculation before returning list-view average prices, using a widened `3.0 * IQR` fence instead of the more aggressive standard `1.5 * IQR`.
 - The market list can still sort by `Buy now vs avg`, but the temporary post-query min/max filters for that diff were removed to keep the filter section smaller.
 - The market list now has an explicit asc/desc sort-direction icon button next to the sort dropdown, backed by a `sortDirection` query param and shared local sort helpers.
+- 2026-04-21: The backend now stores robust all-time order averages in a persistent `market_card_averages` SQLite table instead of recomputing every average during `/api/cards/averages` page loads.
+- `src/server/marketServer.ts` warms the average cache once if the table is empty, reads `/api/cards/averages` directly from the cache table, and refreshes each card's cached average after collection or on-demand detail refreshes insert new orders.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 
