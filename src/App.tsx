@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Container, Stack, Typography } from '@mui/material';
 
 import { MarketDetail } from './components/market/Detail/MarketDetail';
@@ -43,6 +43,36 @@ function isWithinRange(
   return true;
 }
 
+function normalizeSeries(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function listingMatchesSeries(
+  listing: Listing,
+  series: string | undefined
+): boolean {
+  const normalizedSeries = normalizeSeries(series);
+  if (!normalizedSeries) return true;
+
+  return normalizeSeries(listing.item?.series) === normalizedSeries;
+}
+
+function getSeriesOptions(listings: Listing[]): string[] {
+  const seriesByKey = new Map<string, string>();
+
+  for (const listing of listings) {
+    const series = listing.item?.series?.trim();
+    if (!series) continue;
+
+    const key = series.toLowerCase();
+    if (!seriesByKey.has(key)) {
+      seriesByKey.set(key, series);
+    }
+  }
+
+  return [...seriesByKey.values()].sort((a, b) => a.localeCompare(b));
+}
+
 export default function App() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
   const sortDirection: SortOrder = params?.sortDirection ?? getDefaultSortDirection(params?.sort);
@@ -58,6 +88,10 @@ export default function App() {
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [listingState, setListingState] = useState<LoadState>('idle');
   const [listingError, setListingError] = useState('');
+  const seriesOptions = useMemo(
+    () => getSeriesOptions(allListings),
+    [allListings]
+  );
   // const [selectedUuid, setSelectedUuid] = useState<string | null>(
   //   initialFilters.selectedUuid
   // );
@@ -153,7 +187,8 @@ export default function App() {
               prices.sellNow,
               parseNonNegativeQueryNumber(params?.minSellNow),
               parseNonNegativeQueryNumber(params?.maxSellNow)
-            )
+            ) &&
+            listingMatchesSeries(listing, params?.series)
           );
         });
 
@@ -214,6 +249,7 @@ export default function App() {
     params?.minSellNow,
     params?.query,
     params?.rarity,
+    params?.series,
     params?.sort,
     params?.sortDirection,
   ]);
@@ -258,6 +294,7 @@ export default function App() {
           listings={filteredListings}
           listingError={listingError}
           listingState={listingState}
+          seriesOptions={seriesOptions}
         />
 
         <MarketDetail />

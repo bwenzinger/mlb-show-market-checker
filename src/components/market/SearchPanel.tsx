@@ -56,10 +56,20 @@ function toNonNegativeQueryValue(value: string): string | undefined {
   return String(Math.max(Math.trunc(parsed), 0));
 }
 
+function includesSeriesOption(options: string[], value: string | undefined) {
+  const normalizedValue = value?.trim().toLowerCase();
+  if (!normalizedValue) return true;
+
+  return options.some(
+    (option) => option.trim().toLowerCase() === normalizedValue
+  );
+}
+
 interface SearchPanelProps {
   listings: Listing[];
   listingError: string;
   listingState: LoadState;
+  seriesOptions: string[];
 }
 
 interface PriceFiltersFieldsProps {
@@ -155,6 +165,7 @@ export const SearchPanel = function SearchPanel({
   listings,
   listingError,
   listingState,
+  seriesOptions,
 }: SearchPanelProps) {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -185,12 +196,16 @@ export const SearchPanel = function SearchPanel({
       ? listings.length * LIST_ROW_HEIGHT - LIST_ROW_GAP
       : MIN_LIST_HEIGHT;
   const visibleListings = listings.slice(startIndex, endIndex);
-  const activePriceFilterCount = [
+  const activeFilterCount = [
     params?.minBuyNow,
     params?.maxBuyNow,
     params?.minSellNow,
     params?.maxSellNow,
+    params?.series,
   ].filter(Boolean).length;
+  const seriesSelectOptions = includesSeriesOption(seriesOptions, params?.series)
+    ? seriesOptions
+    : [params.series ?? '', ...seriesOptions];
 
   useEffect(() => {
     if (showInitialLoadingState) return;
@@ -245,32 +260,55 @@ export const SearchPanel = function SearchPanel({
   }, [listings, params?.uuid]);
 
   const priceFiltersContent = (
-    <PriceFiltersFields
-      maxBuyNow={params?.maxBuyNow}
-      maxSellNow={params?.maxSellNow}
-      minBuyNow={params?.minBuyNow}
-      minSellNow={params?.minSellNow}
-      onMaxBuyNowChange={(value) => {
-        setQueryParams({
-          maxBuyNow: value,
-        });
-      }}
-      onMaxSellNowChange={(value) => {
-        setQueryParams({
-          maxSellNow: value,
-        });
-      }}
-      onMinBuyNowChange={(value) => {
-        setQueryParams({
-          minBuyNow: value,
-        });
-      }}
-      onMinSellNowChange={(value) => {
-        setQueryParams({
-          minSellNow: value,
-        });
-      }}
-    />
+    <Stack spacing={2}>
+      <FormControl fullWidth disabled={seriesSelectOptions.length === 0}>
+        <InputLabel id="series-filter-label">Series</InputLabel>
+        <Select
+          label="Series"
+          labelId="series-filter-label"
+          onChange={(event: SelectChangeEvent) =>
+            setQueryParams({
+              series: event.target.value,
+            })
+          }
+          value={params?.series ?? ''}
+        >
+          <MenuItem value="">All</MenuItem>
+          {seriesSelectOptions.map((series) => (
+            <MenuItem key={series} value={series}>
+              {series}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      <PriceFiltersFields
+        maxBuyNow={params?.maxBuyNow}
+        maxSellNow={params?.maxSellNow}
+        minBuyNow={params?.minBuyNow}
+        minSellNow={params?.minSellNow}
+        onMaxBuyNowChange={(value) => {
+          setQueryParams({
+            maxBuyNow: value,
+          });
+        }}
+        onMaxSellNowChange={(value) => {
+          setQueryParams({
+            maxSellNow: value,
+          });
+        }}
+        onMinBuyNowChange={(value) => {
+          setQueryParams({
+            minBuyNow: value,
+          });
+        }}
+        onMinSellNowChange={(value) => {
+          setQueryParams({
+            minSellNow: value,
+          });
+        }}
+      />
+    </Stack>
   );
 
   return (
@@ -419,8 +457,8 @@ export const SearchPanel = function SearchPanel({
           sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
           variant="outlined"
         >
-          {activePriceFilterCount > 0
-            ? `Filters (${activePriceFilterCount})`
+          {activeFilterCount > 0
+            ? `Filters (${activeFilterCount})`
             : 'Filters'}
         </Button>
 

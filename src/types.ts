@@ -9,6 +9,7 @@ export interface FilterUrlParams {
   minSellNow?: string;
   query?: string;
   rarity?: string;
+  series?: string;
   sort?: SortKey;
   sortDirection?: SortOrder;
   uuid?: string;
