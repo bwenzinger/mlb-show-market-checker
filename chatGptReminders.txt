@@ -41,6 +41,7 @@ Current snapshot (2026-04-20):
 - The Market Detail summary cards now show `7-day trend` and `All time average` instead of the old history-start date cards.
 - `7-day trend` is derived from the daily buy-now history series over the latest 7-day window, and `All time average` is derived from the all-orders dataset currently shown in detail view.
 - The `All time average` card now also shows a signed `buy now vs avg` difference badge, colored by whether the current buy-now price is above or below the all-time average.
+- The backend `/api/cards/averages` endpoint now removes outlier trade prices with an IQR-based robust-average calculation before returning list-view average prices, using a widened `3.0 * IQR` fence instead of the more aggressive standard `1.5 * IQR`.
 - The market list can still sort by `Buy now vs avg`, but the temporary post-query min/max filters for that diff were removed to keep the filter section smaller.
 - The market list now has an explicit asc/desc sort-direction icon button next to the sort dropdown, backed by a `sortDirection` query param and shared local sort helpers.
 - Existing build note:

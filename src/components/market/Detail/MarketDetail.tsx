@@ -35,6 +35,7 @@ import {
   type OrderPoint,
   type PricePoint,
 } from '../../../marketUtils';
+import { calculateRobustAverage } from '../../../orderStats';
 import {
   fetchListingByUuid,
   fetchStoredCompletedOrders,
@@ -291,14 +292,9 @@ export function MarketDetail() {
     return lastValue - firstValue;
   }, [priceHistory]);
   const allTimeAverage = useMemo(() => {
-    if (allCompletedOrders.length === 0) return null;
-
-    const total = allCompletedOrders.reduce(
-      (sum, order) => sum + order.price,
-      0
+    return calculateRobustAverage(
+      allCompletedOrders.map((order) => order.price)
     );
-
-    return total / allCompletedOrders.length;
   }, [allCompletedOrders]);
   const buyNowVsAllTimeAverageDiff = useMemo(() => {
     if (allTimeAverage === null || bestSell === null) return null;

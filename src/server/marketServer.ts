@@ -8,6 +8,7 @@ import express, {
   type Response,
 } from "express";
 
+import { calculateRobustAverage } from "../orderStats";
 import type {
   CompletedOrder,
   ItemType,
@@ -274,22 +275,38 @@ function startHttpServer() {
   });
 
   app.get("/api/cards/averages", (_req, res) => {
-    const rows = db
+    const rawRows = db
       .prepare(
         `
           SELECT
             uuid,
-            AVG(price) AS averagePrice,
-            COUNT(*) AS orderCount
+            price
           FROM stored_completed_orders
-          GROUP BY uuid
+          ORDER BY uuid ASC, price ASC
         `,
       )
       .all() as Array<{
-        averagePrice: number | null;
-        orderCount: number;
+        price: number;
         uuid: string;
       }>;
+
+    const pricesByUuid = new Map<string, number[]>();
+
+    for (const row of rawRows) {
+      const prices = pricesByUuid.get(row.uuid);
+
+      if (prices) {
+        prices.push(row.price);
+      } else {
+        pricesByUuid.set(row.uuid, [row.price]);
+      }
+    }
+
+    const rows = [...pricesByUuid.entries()].map(([uuid, prices]) => ({
+      averagePrice: calculateRobustAverage(prices),
+      orderCount: prices.length,
+      uuid,
+    }));
 
     res.json({ source: "local-db", averages: rows });
   });
