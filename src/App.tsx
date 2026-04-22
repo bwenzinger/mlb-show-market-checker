@@ -57,6 +57,18 @@ function listingMatchesSeries(
   return normalizeSeries(listing.item?.series) === normalizedSeries;
 }
 
+function listingsIncludeSeries(
+  listings: Listing[],
+  series: string | undefined
+): boolean {
+  const normalizedSeries = normalizeSeries(series);
+  if (!normalizedSeries) return true;
+
+  return listings.some(
+    (listing) => normalizeSeries(listing.item?.series) === normalizedSeries
+  );
+}
+
 function getSeriesOptions(listings: Listing[]): string[] {
   const seriesByKey = new Map<string, string>();
 
@@ -174,6 +186,17 @@ export default function App() {
 
         if (!active) return;
 
+        const seriesForFilter = listingsIncludeSeries(
+          nextListings,
+          params?.series
+        )
+          ? params?.series
+          : undefined;
+
+        if (params?.series && seriesForFilter === undefined) {
+          setQueryParams({ series: undefined });
+        }
+
         nextListings = nextListings.filter((listing) => {
           const prices = getListingPrices(listing);
 
@@ -188,7 +211,7 @@ export default function App() {
               parseNonNegativeQueryNumber(params?.minSellNow),
               parseNonNegativeQueryNumber(params?.maxSellNow)
             ) &&
-            listingMatchesSeries(listing, params?.series)
+            listingMatchesSeries(listing, seriesForFilter)
           );
         });
 

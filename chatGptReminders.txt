@@ -51,6 +51,7 @@ Current snapshot (2026-04-20):
 - 2026-04-21: Fixed the initial market-list fetch guard in `App.tsx`; an empty URL with no `itemType`, `query`, or `rarity` now still performs the first server fetch instead of reusing the empty initial list.
 - 2026-04-21: Added a URL-backed post-query `series` filter in the SearchPanel filter drawer. `App.tsx` derives available series options dynamically from the current fetched listing set and filters locally, so changing series does not trigger a new listing API fetch.
 - Current local `market_cards` series values observed when adding the filter: `2nd Half Heroes`, `All-Star`, `Awards`, `Breakout`, `Contributor`, `Default`, `Egg Hunt`, `Last Ride`, `Live`, `New Threads`, `Postseason`, `Spotlight`, `Spring Breakout`, `St. Patrick's Day`, `Standout`, `Topps Now`, `Veteran`, and `World Baseball Classic`; future API values should appear automatically because the UI does not hard-code this list.
+- 2026-04-22: Type changes now clear the post-query `series` filter, and `App.tsx` also drops stale series params when the newly fetched result set does not contain that series. This prevents `series=Live` from making non-player types like Equipment look empty because those item types currently return `series: Default`.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 

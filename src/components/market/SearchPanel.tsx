@@ -347,6 +347,7 @@ export const SearchPanel = function SearchPanel({
             onChange={(event: SelectChangeEvent) =>
               setQueryParams({
                 itemType: event.target.value as ItemType,
+                series: undefined,
               })
             }
             value={params?.itemType ?? ''}
