@@ -186,9 +186,9 @@ export const SearchPanel = function SearchPanel({
     listingState === 'loading' && listings.length === 0;
   const showRefreshingOverlay =
     listingState === 'loading' && listings.length > 0;
-  const activeSort = params?.sort;
+  const activeSort: SortKey = params?.sort ?? 'rank';
   const activeSortDirection = resolveSortDirection(
-    params?.sort,
+    activeSort,
     params?.sortDirection
   );
   const nextSortDirection = activeSortDirection === 'desc' ? 'asc' : 'desc';
@@ -417,7 +417,7 @@ export const SearchPanel = function SearchPanel({
             spacing={1}
             sx={{ alignItems: 'center', flex: 1 }}
           >
-            <FormControl fullWidth>
+            <FormControl fullWidth sx={{ minWidth: 150 }}>
               <InputLabel id="sort-label">Sort</InputLabel>
               <Select
                 label="Sort"
@@ -427,7 +427,7 @@ export const SearchPanel = function SearchPanel({
                     sort: event.target.value as SortKey,
                   })
                 }
-                value={params?.sort ?? ''}
+                value={activeSort}
               >
                 {sortOptions.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
@@ -470,7 +470,7 @@ export const SearchPanel = function SearchPanel({
           </Stack>
         </Stack>
 
-        {params?.sort === 'spread_percentage' ? (
+        {activeSort === 'spread_percentage' ? (
           <TextField
             fullWidth
             inputProps={{ min: 0, step: 1 }}

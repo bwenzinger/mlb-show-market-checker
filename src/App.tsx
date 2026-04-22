@@ -17,6 +17,7 @@ import {
   fetchStoredOrderAverages,
   type Listing,
   type StoredOrderAverage,
+  type SortKey,
   type SortOrder,
 } from './showApi';
 import { useQueryParams } from './components/market/common/useQueryParams';
@@ -87,7 +88,9 @@ function getSeriesOptions(listings: Listing[]): string[] {
 
 export default function App() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
-  const sortDirection: SortOrder = params?.sortDirection ?? getDefaultSortDirection(params?.sort);
+  const activeSort: SortKey = params?.sort ?? 'rank';
+  const sortDirection: SortOrder =
+    params?.sortDirection ?? getDefaultSortDirection(activeSort);
   // const initialFilters = useMemo(readFiltersFromUrl, []);
   // const [query, setQuery] = useState(initialFilters.searchText);
   // const [itemType, setItemType] = useState(initialFilters.itemType);
@@ -215,22 +218,22 @@ export default function App() {
           );
         });
 
-        if (isSpreadSort(params?.sort)) {
+        if (isSpreadSort(activeSort)) {
           nextListings = sortListingsBySpread(
             filterListingsForSpreadSort(
               nextListings,
-              params?.sort,
+              activeSort,
               params?.minSpreadForPercent
                 ? Number(params?.minSpreadForPercent)
                 : undefined
             ),
-            params?.sort,
+            activeSort,
             sortDirection
           );
         } else {
           nextListings = sortListingsByStandardMetric(
             nextListings,
-            params?.sort,
+            activeSort,
             sortDirection
           );
         }
