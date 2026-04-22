@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Avatar,
+  Badge,
   Box,
   Button,
   CircularProgress,
@@ -453,15 +454,26 @@ export const SearchPanel = function SearchPanel({
           />
         ) : null}
 
-        <Button
-          onClick={() => setIsFiltersDrawerOpen(true)}
-          sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
-          variant="outlined"
+        <Badge
+          badgeContent={activeFilterCount}
+          color="primary"
+          invisible={activeFilterCount === 0}
+          max={99}
+          sx={{ alignSelf: 'flex-start' }}
         >
-          {activeFilterCount > 0
-            ? `Filters (${activeFilterCount})`
-            : 'Filters'}
-        </Button>
+          <Button
+            aria-label={
+              activeFilterCount > 0
+                ? `Open filters, ${activeFilterCount} active`
+                : 'Open filters'
+            }
+            onClick={() => setIsFiltersDrawerOpen(true)}
+            sx={{ textTransform: 'none' }}
+            variant="outlined"
+          >
+            Filters
+          </Button>
+        </Badge>
 
         <Drawer
           anchor="right"
