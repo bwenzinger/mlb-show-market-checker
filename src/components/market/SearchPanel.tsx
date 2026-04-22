@@ -204,9 +204,33 @@ export const SearchPanel = function SearchPanel({
     params?.maxSellNow,
     params?.series,
   ].filter(Boolean).length;
+  const activeAnyFilterCount = [
+    params?.query,
+    params?.itemType,
+    params?.rarity,
+    params?.minSpreadForPercent,
+    params?.minBuyNow,
+    params?.maxBuyNow,
+    params?.minSellNow,
+    params?.maxSellNow,
+    params?.series,
+  ].filter(Boolean).length;
   const seriesSelectOptions = includesSeriesOption(seriesOptions, params?.series)
     ? seriesOptions
     : [params.series ?? '', ...seriesOptions];
+  const clearAllFilters = () => {
+    setQueryParams({
+      itemType: undefined,
+      maxBuyNow: undefined,
+      maxSellNow: undefined,
+      minBuyNow: undefined,
+      minSellNow: undefined,
+      minSpreadForPercent: undefined,
+      query: undefined,
+      rarity: undefined,
+      series: undefined,
+    });
+  };
 
   useEffect(() => {
     if (showInitialLoadingState) return;
@@ -236,29 +260,24 @@ export const SearchPanel = function SearchPanel({
 
   useEffect(() => {
     const node = listRef.current;
-    if (!node) return;
-
-    const activeIndex = listings.findIndex(
-      (listing) => listing.item?.uuid === params?.uuid
-    );
-    if (activeIndex < 0) return;
-
-    const rowTop = activeIndex * LIST_ROW_HEIGHT;
-    const rowBottom = rowTop + LIST_ITEM_HEIGHT;
-    const viewportTop = node.scrollTop;
-    const viewportBottom = viewportTop + node.clientHeight;
-
-    if (rowTop < viewportTop) {
-      node.scrollTo({ top: rowTop });
-      return;
+    if (node) {
+      node.scrollTo({ top: 0 });
     }
 
-    if (rowBottom > viewportBottom) {
-      node.scrollTo({
-        top: Math.max(rowBottom - node.clientHeight, 0),
-      });
-    }
-  }, [listings, params?.uuid]);
+    setScrollTop(0);
+  }, [
+    params?.itemType,
+    params?.maxBuyNow,
+    params?.maxSellNow,
+    params?.minBuyNow,
+    params?.minSellNow,
+    params?.minSpreadForPercent,
+    params?.query,
+    params?.rarity,
+    params?.series,
+    params?.sort,
+    params?.sortDirection,
+  ]);
 
   const priceFiltersContent = (
     <Stack spacing={2}>
@@ -495,13 +514,23 @@ export const SearchPanel = function SearchPanel({
               <Typography fontWeight={900} variant="h6">
                 Filters
               </Typography>
-              <Button
-                onClick={() => setIsFiltersDrawerOpen(false)}
-                size="small"
-                sx={{ textTransform: 'none' }}
-              >
-                Close
-              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  disabled={activeAnyFilterCount === 0}
+                  onClick={clearAllFilters}
+                  size="small"
+                  sx={{ textTransform: 'none' }}
+                >
+                  Clear all
+                </Button>
+                <Button
+                  onClick={() => setIsFiltersDrawerOpen(false)}
+                  size="small"
+                  sx={{ textTransform: 'none' }}
+                >
+                  Close
+                </Button>
+              </Stack>
             </Stack>
 
             {priceFiltersContent}

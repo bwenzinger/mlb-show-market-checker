@@ -28,7 +28,7 @@ Current snapshot (2026-04-20):
 - The hook only changes the returned params reference when the shallow key/value shape of the URL params changes.
 - `useQueryParams` and `updateQueryParams` now support a generic param shape so reads and updates can be typed by query-param keys.
 - `src/components/market/SearchPanel.tsx` now uses a custom fixed-row virtualized list instead of rendering every market listing row at once.
-- The search list virtualization uses a local scroll container, fixed row height, overscan, and automatic scrolling to keep the selected item visible.
+- The search list virtualization uses a local scroll container, fixed row height, and overscan. It does not auto-scroll to the selected item; sort/filter/search changes reset the list scroll position to the top.
 - `src/marketUtils.ts` now passes `itemType` and `rarity` through to the paginated listings fetch so the app can reduce API requests when those filters are set.
 - When `itemType` is selected, market fetching now only requests that one type instead of all market item types.
 - `SearchPanel` now includes post-query price filters for min/max buy now and min/max sell now.
@@ -53,6 +53,7 @@ Current snapshot (2026-04-20):
 - Current local `market_cards` series values observed when adding the filter: `2nd Half Heroes`, `All-Star`, `Awards`, `Breakout`, `Contributor`, `Default`, `Egg Hunt`, `Last Ride`, `Live`, `New Threads`, `Postseason`, `Spotlight`, `Spring Breakout`, `St. Patrick's Day`, `Standout`, `Topps Now`, `Veteran`, and `World Baseball Classic`; future API values should appear automatically because the UI does not hard-code this list.
 - 2026-04-22: Type changes now clear the post-query `series` filter, and `App.tsx` also drops stale series params when the newly fetched result set does not contain that series. This prevents `series=Live` from making non-player types like Equipment look empty because those item types currently return `series: Default`.
 - 2026-04-22: The SearchPanel filter drawer button now shows the active post-query filter count in a small MUI badge instead of appending the count to the button text.
+- 2026-04-22: The SearchPanel filter drawer includes a `Clear all` action that resets pre-query filters (`query`, `itemType`, `rarity`) and post-query filters (`series`, min/max buy/sell, minimum spread) without changing sort settings.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 
