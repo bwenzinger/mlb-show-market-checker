@@ -473,26 +473,41 @@ export const SearchPanel = function SearchPanel({
           />
         ) : null}
 
-        <Badge
-          badgeContent={activeFilterCount}
-          color="primary"
-          invisible={activeFilterCount === 0}
-          max={99}
-          sx={{ alignSelf: 'flex-start' }}
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{ alignItems: 'center', flexWrap: 'wrap' }}
         >
-          <Button
-            aria-label={
-              activeFilterCount > 0
-                ? `Open filters, ${activeFilterCount} active`
-                : 'Open filters'
-            }
-            onClick={() => setIsFiltersDrawerOpen(true)}
-            sx={{ textTransform: 'none' }}
-            variant="outlined"
+          <Badge
+            badgeContent={activeFilterCount}
+            color="primary"
+            invisible={activeFilterCount === 0}
+            max={99}
           >
-            Filters
-          </Button>
-        </Badge>
+            <Button
+              aria-label={
+                activeFilterCount > 0
+                  ? `Open filters, ${activeFilterCount} active`
+                  : 'Open filters'
+              }
+              onClick={() => setIsFiltersDrawerOpen(true)}
+              sx={{ textTransform: 'none' }}
+              variant="outlined"
+            >
+              Filters
+            </Button>
+          </Badge>
+
+          {activeAnyFilterCount > 0 ? (
+            <Button
+              onClick={clearAllFilters}
+              size="small"
+              sx={{ textTransform: 'none' }}
+            >
+              Clear all
+            </Button>
+          ) : null}
+        </Stack>
 
         <Drawer
           anchor="right"
@@ -514,23 +529,13 @@ export const SearchPanel = function SearchPanel({
               <Typography fontWeight={900} variant="h6">
                 Filters
               </Typography>
-              <Stack direction="row" spacing={1}>
-                <Button
-                  disabled={activeAnyFilterCount === 0}
-                  onClick={clearAllFilters}
-                  size="small"
-                  sx={{ textTransform: 'none' }}
-                >
-                  Clear all
-                </Button>
-                <Button
-                  onClick={() => setIsFiltersDrawerOpen(false)}
-                  size="small"
-                  sx={{ textTransform: 'none' }}
-                >
-                  Close
-                </Button>
-              </Stack>
+              <Button
+                onClick={() => setIsFiltersDrawerOpen(false)}
+                size="small"
+                sx={{ textTransform: 'none' }}
+              >
+                Close
+              </Button>
             </Stack>
 
             {priceFiltersContent}

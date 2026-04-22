@@ -53,7 +53,8 @@ Current snapshot (2026-04-20):
 - Current local `market_cards` series values observed when adding the filter: `2nd Half Heroes`, `All-Star`, `Awards`, `Breakout`, `Contributor`, `Default`, `Egg Hunt`, `Last Ride`, `Live`, `New Threads`, `Postseason`, `Spotlight`, `Spring Breakout`, `St. Patrick's Day`, `Standout`, `Topps Now`, `Veteran`, and `World Baseball Classic`; future API values should appear automatically because the UI does not hard-code this list.
 - 2026-04-22: Type changes now clear the post-query `series` filter, and `App.tsx` also drops stale series params when the newly fetched result set does not contain that series. This prevents `series=Live` from making non-player types like Equipment look empty because those item types currently return `series: Default`.
 - 2026-04-22: The SearchPanel filter drawer button now shows the active post-query filter count in a small MUI badge instead of appending the count to the button text.
-- 2026-04-22: The SearchPanel filter drawer includes a `Clear all` action that resets pre-query filters (`query`, `itemType`, `rarity`) and post-query filters (`series`, min/max buy/sell, minimum spread) without changing sort settings.
+- 2026-04-22: The SearchPanel main filter row includes a visible `Clear all` action that resets pre-query filters (`query`, `itemType`, `rarity`) and post-query filters (`series`, min/max buy/sell, minimum spread) without changing sort settings.
+- Reminder for UI/UX changes: consider the actual page layout and user workflow before choosing where controls live; make smart, reasonable placement and behavior decisions from the user's perspective rather than simply adding controls wherever the code is easiest.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 
