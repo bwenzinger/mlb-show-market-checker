@@ -115,7 +115,9 @@ function PriceFiltersFields({
         fullWidth
         inputProps={{ min: 0, step: 1 }}
         label="Min buy now"
-        onChange={(event) => onMinBuyNowChange(toNonNegativeQueryValue(event.target.value))}
+        onChange={(event) =>
+          onMinBuyNowChange(toNonNegativeQueryValue(event.target.value))
+        }
         type="number"
         value={minBuyNow ?? ''}
       />
@@ -123,7 +125,9 @@ function PriceFiltersFields({
         fullWidth
         inputProps={{ min: 0, step: 1 }}
         label="Max buy now"
-        onChange={(event) => onMaxBuyNowChange(toNonNegativeQueryValue(event.target.value))}
+        onChange={(event) =>
+          onMaxBuyNowChange(toNonNegativeQueryValue(event.target.value))
+        }
         type="number"
         value={maxBuyNow ?? ''}
       />
@@ -131,7 +135,9 @@ function PriceFiltersFields({
         fullWidth
         inputProps={{ min: 0, step: 1 }}
         label="Min sell now"
-        onChange={(event) => onMinSellNowChange(toNonNegativeQueryValue(event.target.value))}
+        onChange={(event) =>
+          onMinSellNowChange(toNonNegativeQueryValue(event.target.value))
+        }
         type="number"
         value={minSellNow ?? ''}
       />
@@ -139,7 +145,9 @@ function PriceFiltersFields({
         fullWidth
         inputProps={{ min: 0, step: 1 }}
         label="Max sell now"
-        onChange={(event) => onMaxSellNowChange(toNonNegativeQueryValue(event.target.value))}
+        onChange={(event) =>
+          onMaxSellNowChange(toNonNegativeQueryValue(event.target.value))
+        }
         type="number"
         value={maxSellNow ?? ''}
       />
@@ -215,7 +223,10 @@ export const SearchPanel = function SearchPanel({
     params?.maxSellNow,
     params?.series,
   ].filter(Boolean).length;
-  const seriesSelectOptions = includesSeriesOption(seriesOptions, params?.series)
+  const seriesSelectOptions = includesSeriesOption(
+    seriesOptions,
+    params?.series
+  )
     ? seriesOptions
     : [params.series ?? '', ...seriesOptions];
   const clearAllFilters = () => {
@@ -401,7 +412,11 @@ export const SearchPanel = function SearchPanel({
             </Select>
           </FormControl>
 
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flex: 1 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', flex: 1 }}
+          >
             <FormControl fullWidth>
               <InputLabel id="sort-label">Sort</InputLabel>
               <Select
@@ -476,7 +491,11 @@ export const SearchPanel = function SearchPanel({
         <Stack
           direction="row"
           spacing={1.5}
-          sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+          }}
         >
           <Badge
             badgeContent={activeFilterCount}
@@ -498,15 +517,13 @@ export const SearchPanel = function SearchPanel({
             </Button>
           </Badge>
 
-          {activeAnyFilterCount > 0 ? (
-            <Button
-              onClick={clearAllFilters}
-              size="small"
-              sx={{ textTransform: 'none' }}
-            >
-              Clear all
-            </Button>
-          ) : null}
+          <Button
+            onClick={clearAllFilters}
+            size="small"
+            sx={{ textTransform: 'none' }}
+          >
+            Clear all
+          </Button>
         </Stack>
 
         <Drawer
