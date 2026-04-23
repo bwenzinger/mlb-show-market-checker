@@ -1,67 +1,264 @@
-NOTE: Update this file with all noteworthy information based on changes we make.
+Project brain: mlb-show-market-checker
 
-Project: mlb-show-market-checker
-Purpose: Running project notes for future ChatGPT/Codex sessions.
+How to use this file
+- Treat this file as the durable "brain" of the application, not as a changelog.
+- Before making changes, read this file to understand the app's current product behavior, data flow, architecture, and non-obvious decisions.
+- When behavior changes, update the relevant canonical section below instead of only appending a dated entry.
+- Add dated notes only for temporary context, migration warnings, known one-time issues, or facts that are useful historically.
+- Keep this file focused on complete logic: what exists, why it exists, how it works, and what future changes must preserve.
+- UI/UX changes should consider the actual page layout and user workflow. Place controls where users naturally need them and make smart, reasonable behavior decisions from the user's perspective.
 
-Current snapshot (2026-04-20):
-- Frontend stack: React 19, TypeScript, Vite, Material UI.
-- Useful scripts: `npm run dev`, `npm run typecheck`, `npm run build`.
-- Shared market UI components were split out of `src/components/market/Common.tsx`.
-- Shared components now live in `src/components/market/common/`.
-- `src/components/market/common/index.ts` is the barrel file used by market components.
-- `src/components/market/SearchPanel.tsx` imports shared components from `./common`.
-- `src/components/market/MarketDetail.tsx` imports shared components from `./common`.
-- `src/components/market/Common.tsx` was removed.
-- New shared component files:
-  - `src/components/market/common/DebounceTextField.tsx`
-  - `src/components/market/common/ListLoadingState.tsx`
-  - `src/components/market/common/MetricCard.tsx`
-  - `src/components/market/common/QuickSellBadge.tsx`
-  - `src/components/market/common/ProfitMetric.tsx`
-  - `src/components/market/common/SectionHeading.tsx`
-  - `src/components/market/common/ChartCard.tsx`
-- Verification after the split:
-  - `npm run typecheck` passed.
-  - `npm run build` passed.
-- `src/components/market/common/useQueryParams.ts` was changed from a local shallow-stable ref helper into a shared URL query-param store.
-- The hook now uses `useSyncExternalStore`, listens for `popstate`, patches `history.pushState` and `history.replaceState`, and returns stable params plus `setQueryParams`.
-- The hook only changes the returned params reference when the shallow key/value shape of the URL params changes.
-- `useQueryParams` and `updateQueryParams` now support a generic param shape so reads and updates can be typed by query-param keys.
-- `src/components/market/SearchPanel.tsx` now uses a custom fixed-row virtualized list instead of rendering every market listing row at once.
-- The search list virtualization uses a local scroll container, fixed row height, and overscan. It does not auto-scroll to the selected item; sort/filter/search changes reset the list scroll position to the top.
-- `src/marketUtils.ts` now passes `itemType` and `rarity` through to the paginated listings fetch so the app can reduce API requests when those filters are set.
-- When `itemType` is selected, market fetching now only requests that one type instead of all market item types.
-- `SearchPanel` now includes post-query price filters for min/max buy now and min/max sell now.
-- The new price filters are URL-backed query params and are applied locally in `fetchSortedListings` after the API response is received.
-- The post-query price filters now always live behind a `Filters` button in `SearchPanel`, which opens a right-side drawer on both desktop and smaller layouts to save space in the sidebar.
-- `App.tsx` was reorganized to fetch only when server-side inputs change, then reuse the current listings array for local transforms.
-- Min/max buy/sell filters are now applied in `App.tsx` before the local spread/standard sort step so price-only changes can reuse the existing list.
-- `MarketDetail` now has a local Refresh button in the detail header.
-- The detail refresh is driven by local component state in `MarketDetail`, so it reloads the selected detail page and order history without retriggering the whole list fetch in `App.tsx`.
-- The Market Detail summary cards now show `7-day trend` and `All time average` instead of the old history-start date cards.
-- `7-day trend` is derived from the daily buy-now history series over the latest 7-day window, and `All time average` is derived from the all-orders dataset currently shown in detail view.
-- The `All time average` card now also shows a signed `buy now vs avg` difference badge, colored by whether the current buy-now price is above or below the all-time average.
-- The backend `/api/cards/averages` endpoint now removes outlier trade prices with an IQR-based robust-average calculation before returning list-view average prices, using a widened `3.0 * IQR` fence instead of the more aggressive standard `1.5 * IQR`.
-- The market list can still sort by `Buy now vs avg`, but the temporary post-query min/max filters for that diff were removed to keep the filter section smaller.
-- The market list now has an explicit asc/desc sort-direction icon button next to the sort dropdown, backed by a `sortDirection` query param and shared local sort helpers.
-- 2026-04-21: The backend now stores robust all-time order averages in a persistent `market_card_averages` SQLite table instead of recomputing every average during `/api/cards/averages` page loads.
-- `src/server/marketServer.ts` warms the average cache once if the table is empty, reads `/api/cards/averages` directly from the cache table, and refreshes each card's cached average after collection or on-demand detail refreshes insert new orders.
-- 2026-04-21: `MarketDetail` now reads the selected card's all-time average through the cached average API instead of recomputing it from the long all-orders dataset.
-- Future player/card average-price features should use the same `market_card_averages` table via the cached average endpoints (`/api/cards/averages` or `/api/cards/:uuid/average`) so list, detail, sorting, and any new average-price UI stay consistent.
-- 2026-04-21: Fixed the initial market-list fetch guard in `App.tsx`; an empty URL with no `itemType`, `query`, or `rarity` now still performs the first server fetch instead of reusing the empty initial list.
-- 2026-04-21: Added a URL-backed post-query `series` filter in the SearchPanel filter drawer. `App.tsx` derives available series options dynamically from the current fetched listing set and filters locally, so changing series does not trigger a new listing API fetch.
-- Current local `market_cards` series values observed when adding the filter: `2nd Half Heroes`, `All-Star`, `Awards`, `Breakout`, `Contributor`, `Default`, `Egg Hunt`, `Last Ride`, `Live`, `New Threads`, `Postseason`, `Spotlight`, `Spring Breakout`, `St. Patrick's Day`, `Standout`, `Topps Now`, `Veteran`, and `World Baseball Classic`; future API values should appear automatically because the UI does not hard-code this list.
-- 2026-04-22: Type changes now clear the post-query `series` filter, and `App.tsx` also drops stale series params when the newly fetched result set does not contain that series. This prevents `series=Live` from making non-player types like Equipment look empty because those item types currently return `series: Default`.
-- 2026-04-22: The SearchPanel filter drawer button now shows the active post-query filter count in a small MUI badge instead of appending the count to the button text.
-- 2026-04-22: The SearchPanel main filter row includes a visible `Clear all` action that resets pre-query filters (`query`, `itemType`, `rarity`) and post-query filters (`series`, min/max buy/sell, minimum spread) without changing sort settings.
-- Reminder for UI/UX changes: consider the actual page layout and user workflow before choosing where controls live; make smart, reasonable placement and behavior decisions from the user's perspective rather than simply adding controls wherever the code is easiest.
-- 2026-04-22: The sort dropdown now uses the app's effective default sort (`Overall` / `rank`) when no `sort` query param exists, and the control has a minimum width so it does not collapse before the user picks a sort.
-- 2026-04-23: Sort and series select values are normalized before passing them to MUI Select controls. This avoids out-of-range select errors when URL params are missing, invalid, or differ only by case from dynamic options such as `World Baseball Classic`.
-- 2026-04-23: Market search now matches listing name, item name, item series, item type label, and item type, with token fallback for phrases like `spring breakout cards`; series searches no longer depend on player names containing the series text.
-- Existing build note:
-  - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
+Purpose
+- React frontend plus Node/SQLite backend for exploring the MLB The Show 26 market.
+- Main use case: scan market listings, filter/search/sort opportunities, inspect a selected item, and compare live prices against stored completed-order history.
+- The app is designed to run locally during development and as a single-machine public/home server behind a systemd service.
 
-Reminder for future updates:
-- Add the date of each notable change.
-- Record what changed, where it changed, and how it was verified.
-- Capture ongoing risks, TODOs, or non-obvious project decisions.
+Stack and commands
+- Frontend: React 19, TypeScript, Vite, Material UI.
+- Backend: Node 25+, Express 5, Node's built-in SQLite API (`node:sqlite`), TypeScript via `tsx`.
+- Useful commands:
+  - `npm run dev`: starts backend and Vite dev server.
+  - `npm run market-server`: starts backend only.
+  - `npm run collect:once`: runs one collection pass.
+  - `npm run typecheck`: TypeScript check.
+  - `npm run build`: TypeScript check plus Vite production build.
+- Build warning: Vite currently warns that the main JS bundle is larger than 500 kB after minification. This is known.
+
+Top-level architecture
+- `src/App.tsx` coordinates the list workflow: read URL params, fetch listing data when needed, apply local transforms, choose the selected UUID, and render `SearchPanel` plus `MarketDetail`.
+- `src/components/market/SearchPanel.tsx` owns the sidebar UI: search/type/rarity/sort controls, post-query filter drawer, clear-all control, and the virtualized listing list.
+- `src/components/market/Detail/MarketDetail.tsx` owns selected-item data loading and detail-state orchestration.
+- `src/components/market/Detail/MarketDetailView.tsx` renders the item detail surface.
+- `src/components/market/common/` contains shared UI helpers:
+  - `DebounceTextField`
+  - `ListLoadingState`
+  - `MetricCard`
+  - `QuickSellBadge`
+  - `ProfitMetric`
+  - `SectionHeading`
+  - `ChartCard`
+  - `useQueryParams`
+- `src/marketUtils.ts` is the main frontend domain utility file: filter/sort options, normalization, price math, quick-sell fallback, search matching, parsing/formatting, listing fetching, and local list sorting.
+- `src/showApi.ts` is the frontend API client for live MLB The Show API proxy calls and local history endpoints.
+- `src/server/marketServer.ts` is the backend service: static frontend host, API proxy, SQLite persistence, market collector, and cached average endpoints.
+- `src/orderStats.ts` contains robust average logic shared by backend average computation.
+
+URL state and query params
+- URL params are the source of truth for list controls and selected item state.
+- `useQueryParams` in `src/components/market/common/useQueryParams.ts` uses `useSyncExternalStore`, listens for `popstate`, patches `history.pushState` and `history.replaceState`, and returns stable param references when the shallow key/value shape does not change.
+- Typed URL params live in `src/types.ts` as `FilterUrlParams`.
+- Current important params:
+  - `query`: search text.
+  - `itemType`: item type (`mlb_card`, `stadium`, `equipment`, `sponsorship`, `unlockable`).
+  - `rarity`: rarity filter.
+  - `uuid`: selected listing/item.
+  - `sort`: active sort key.
+  - `sortDirection`: `asc` or `desc`.
+  - `minSpreadForPercent`: minimum spread used only for spread percentage sorting.
+  - `series`: post-query series filter.
+  - `minBuyNow`, `maxBuyNow`, `minSellNow`, `maxSellNow`: post-query price filters.
+
+List data flow
+- On first load, even with an empty URL, `App.tsx` must fetch listing data. Do not regress this; the previous failure mode was an empty initial list because "previous fetch" and current params were all undefined.
+- `App.tsx` decides whether to fetch new listing data by comparing `itemType`, `query`, and `rarity` against the previous fetch key.
+- `itemType` and `rarity` reduce API work:
+  - If `itemType` is selected, only that type is fetched.
+  - If `itemType` is empty, all market item types are fetched.
+  - `rarity` is passed to the listing API calls.
+- Search text currently participates in the fetch key, then matching is applied locally after fetched listing pages are loaded.
+- Post-query filters (`series`, min/max buy/sell, and spread minimum) should reuse the current fetched listing array instead of triggering new listing API fetches.
+- `App.tsx` stores the fetched/enriched list in `allListings`, applies post-query filters and sorting, then sets `filteredListings` for `SearchPanel`.
+
+Search behavior
+- Market search should match more than player/listing names.
+- `listingMatchesNormalizedSearch` in `src/marketUtils.ts` currently searches:
+  - listing name
+  - item name
+  - item series
+  - item type label
+  - item type
+- Search text is normalized by removing diacritics, lowercasing, and replacing non-alphanumeric characters with spaces.
+- Compact matching supports no-space variants.
+- Token fallback supports phrases like `spring breakout cards` matching cards whose series is `Spring Breakout` and type label is `MLB Card`.
+- This exists because series searches such as "Spring Breakout cards" should not depend on player names containing the words "Spring Breakout".
+
+Type, rarity, and series filtering
+- Main type options:
+  - All
+  - Players (`mlb_card`)
+  - Stadiums (`stadium`)
+  - Equipment (`equipment`)
+  - Sponsorships (`sponsorship`)
+  - Unlockables (`unlockable`)
+- Rarity options:
+  - All
+  - diamond
+  - gold
+  - silver
+  - bronze
+  - common
+- Series is a post-query filter shown in the filter drawer.
+- Series options are derived dynamically from the current fetched listing set. Do not hard-code the series list; new API values should appear automatically.
+- Example series values seen locally: `2nd Half Heroes`, `All-Star`, `Awards`, `Breakout`, `Contributor`, `Default`, `Egg Hunt`, `Last Ride`, `Live`, `New Threads`, `Postseason`, `Spotlight`, `Spring Breakout`, `St. Patrick's Day`, `Standout`, `Topps Now`, `Veteran`, `World Baseball Classic`.
+- Type changes clear `series`, because non-player types currently often return `series: Default`; a stale `series=Live` can make Equipment/Stadium/etc. look empty.
+- `App.tsx` also drops stale series params when the newly fetched result set does not contain that series.
+- Sort and series values should be normalized before passing them to MUI `Select` controls to avoid out-of-range value errors from missing/invalid params or casing differences such as `world baseball classic` vs `World Baseball Classic`.
+
+Sorting
+- Sort options in `src/marketUtils.ts`:
+  - Buy now (`best_sell_price`)
+  - Sell now (`best_buy_price`)
+  - Buy now vs avg (`buy_now_vs_all_time_average_diff`)
+  - Spread (`spread_number`)
+  - Spread % (`spread_percentage`)
+  - Profit (`profit`)
+  - Profit % (`profit_percentage`)
+  - Overall (`rank`)
+- The effective default list sort is `Overall` / `rank` when no valid `sort` param exists.
+- `normalizeSort` returns a safe sort key for invalid/missing URL params.
+- Sort direction is URL-backed by `sortDirection`.
+- Default sort direction:
+  - `best_sell_price` defaults ascending.
+  - all other sorts default descending.
+- The sort dropdown has a minimum width and should not collapse before a user picks a value.
+- `Buy now vs avg` relies on cached all-time averages from `market_card_averages`.
+
+Price, spread, profit, and quick-sell logic
+- `getListingPrices` in `src/marketUtils.ts` returns:
+  - `buyNow`: `best_sell_price`
+  - `sellNow`: `best_buy_price`, unless missing/0 and a quick-sell fallback exists.
+- Quick-sell fallback exists for player cards and supported non-player item types/rarities.
+- `isUsingQuickSellFallback` drives the `QuickSellBadge`.
+- Spread is `buyNow - sellNow`, floored at 0.
+- Sale tax is 10%.
+- Profit is spread minus 10% of buy-now.
+- Profit percentage is profit divided by sell-now.
+- Sort/list metric rendering should keep using the shared helpers so quick-sell behavior is consistent everywhere.
+
+SearchPanel UX
+- The sidebar should feel like a compact market workstation, not a landing page.
+- Search is debounced.
+- Type and rarity are visible primary controls.
+- Sort dropdown plus explicit asc/desc icon button are visible primary controls.
+- The minimum spread field is only visible when sort is `Spread %`.
+- Post-query filters live behind a `Filters` button in a right-side drawer:
+  - series
+  - min/max buy now
+  - min/max sell now
+- The `Filters` button shows the active post-query filter count in a small MUI badge.
+- `Clear all` is on the main SearchPanel row, not hidden inside the drawer. It clears pre-query filters (`query`, `itemType`, `rarity`) and post-query filters (`series`, min/max buy/sell, minimum spread). It does not change sort settings directly.
+- The virtualized list uses a local scroll container, fixed row height, and overscan.
+- The list does not auto-scroll to the selected item.
+- Search/filter/sort changes reset the list scroll position to the top.
+- Clicking a list row updates `uuid` in the URL and selects that item.
+
+Market detail workflow
+- `MarketDetail` reads the selected `uuid` from URL params.
+- A local Refresh button increments component state so the selected detail page and order history reload without retriggering the whole list fetch in `App.tsx`.
+- Detail loading sequence:
+  - fetch live listing detail via `fetchListingByUuid`
+  - fetch cached all-time average via `/api/cards/:uuid/average`
+  - fetch recent stored completed orders using `RECENT_ORDER_LOOKBACK_DAYS` (7 days)
+  - fetch long-term stored completed orders using `ALL_ORDER_LOOKBACK_DAYS` (3650 days)
+- Recent/all-order fetches fall back to the live API sample if local history is unavailable or empty.
+- Summary cards currently show:
+  - Buy now
+  - Sell now
+  - Profit
+  - Spread
+  - All time average
+  - 7-day trend
+- `All time average` must come from the cached average API/table, not from recomputing all orders in the frontend.
+- The all-time average card also shows a signed `current +/-N` badge representing current buy-now vs cached all-time average.
+- `7-day trend` is derived from price history over the latest 7-day window.
+- Detail view also shows daily price history, completed orders by hour, all completed orders table, and all completed orders chart.
+
+Cached average source of truth
+- The source of truth for player/card average price is the backend SQLite table `market_card_averages`.
+- All average-price UI and sort logic should use the cached average endpoints:
+  - `/api/cards/averages`
+  - `/api/cards/:uuid/average`
+- Do not reintroduce frontend recomputation of all-time average from the long all-orders dataset for list/detail cards.
+- Backend robust averages use `calculateRobustAverage` in `src/orderStats.ts`.
+- The robust average removes outlier trade prices with an IQR-based calculation using a widened `3.0 * IQR` fence.
+- The cached average table exists because scanning millions of `stored_completed_orders` rows during page load is too slow.
+- Startup warms `market_card_averages` once if the table is empty and stored orders already exist. The first server start after introducing or clearing the table may pause while warming.
+- Collection and on-demand detail refresh update each affected card's cached average after new orders are inserted, or if an average row does not exist yet.
+
+Backend behavior
+- `src/server/marketServer.ts` loads `.env` if present and reads config through `readConfig`.
+- Default backend config:
+  - API base: `https://mlb26.theshow.com/apis`
+  - host: `127.0.0.1`
+  - port: `4000`
+  - DB path: `market.sqlite`
+  - collector interval: 1 hour
+  - collector concurrency: 4
+  - request delay: 150ms
+  - static dir: `dist`
+- SQLite tables:
+  - `market_cards`: latest known card/listing metadata and raw JSON.
+  - `stored_completed_orders`: normalized completed orders keyed by unique source hash.
+  - `market_card_averages`: cached robust all-time averages.
+  - `collector_runs`: run status and stats.
+- Important indexes:
+  - `idx_stored_completed_orders_uuid_time` on `(uuid, order_time)`.
+- API routes:
+  - `GET /api/health`: ok, collection state, row counts, last run.
+  - `GET /api/show/listings.json`: proxy to MLB The Show listings API.
+  - `GET /api/show/listing.json`: proxy detail API and persist completed orders from the response.
+  - `GET /api/cards/:uuid/orders?days=N`: stored completed orders for one card/item.
+  - `GET /api/cards/averages`: all cached average rows.
+  - `GET /api/cards/:uuid/average`: one cached average row.
+  - `POST /api/collect`: trigger collection.
+- The backend serves the built frontend from `dist/` when available; otherwise API-only mode is active.
+- CORS defaults to `*` unless `CORS_ORIGINS` is configured.
+- The collector fetches all market listings across all item types, persists cards, fetches each listing detail, stores completed orders, and updates cached averages.
+- `collectionInFlight` prevents overlapping collection work.
+
+Data and API notes
+- MLB item types used by the app: `mlb_card`, `stadium`, `equipment`, `sponsorship`, `unlockable`.
+- Non-player types can have different metadata fields than player cards. Use optional access patterns and shared helpers.
+- Equipment, Sponsorships, Stadiums, and Unlockables commonly have `series: Default`; this matters when thinking about series filters.
+- The frontend API client builds paths from `VITE_BACKEND_API_BASE`, `VITE_SHOW_API_BASE`, and `VITE_HISTORY_API_BASE` when present; otherwise it uses same-origin `/api/show` and `/api`.
+- `VITE_HISTORY_API_ENABLED=false` disables local history fetches and returns empty history/average data.
+- `fetchStoredOrderAverages` caches the averages map in memory for 60 seconds on the frontend.
+
+Deployment and server lifecycle
+- The intended always-on Linux setup is a systemd service installed by `scripts/install-systemd-service.sh`.
+- Service name defaults to `mlb-show-market-checker`.
+- `start.sh` runs the backend server with `tsx src/server/marketServer.ts`.
+- Deploy-on-push uses `.github/workflows/deploy-home-server.yml` on a self-hosted Linux runner.
+- Deploy script: `scripts/deploy-from-git.sh`.
+- Deploy script behavior:
+  - refuses dirty working trees
+  - requires Node 25+
+  - checks the live clone is on the expected branch
+  - fetches/fast-forwards from `origin/main`
+  - runs `npm ci`
+  - runs `npm run build`
+  - restarts the systemd service unless `SKIP_SERVICE_RESTART=1`
+- A successful deploy should end with a service restart. If pages act stale after deploy, check GitHub Actions logs, `sudo systemctl status mlb-show-market-checker`, and `sudo journalctl -u mlb-show-market-checker -n 100 --no-pager`.
+
+Design and UX principles for this app
+- This is an operational market-analysis tool. Prefer dense but readable controls, restrained styling, and predictable workflows.
+- Do not build landing-page or marketing-style UI for the core app.
+- Put controls where users need them. Example: `Clear all` belongs near the visible filter controls, not hidden inside the drawer.
+- Keep text inside controls stable and unsquished. Give controls minimum widths where needed.
+- Prefer icons for compact toggles such as sort direction, with accessible labels/tooltips.
+- Avoid auto-scrolling surprises. The list should reset to top when query/filter/sort criteria change, but selecting an item should not force-scroll the list to that item.
+- When adding filters, decide whether they are fetch inputs or post-query/local transforms. Fetch inputs affect API calls; post-query filters should reuse the current fetched list.
+- If a filter can become stale after another control changes, clear or normalize it rather than showing an empty list that looks broken.
+
+Verification expectations
+- For frontend/TypeScript changes, run `npm run typecheck -- --pretty false`.
+- For app behavior changes, run `npm run build` unless the change is documentation-only.
+- Keep the known Vite chunk warning in mind; it does not by itself mean the build failed.
+- When diagnosing list bugs, test the exact URL/query-param combination and determine whether the issue is:
+  - API fetch scope
+  - local search matching
+  - post-query filter state
+  - sort normalization
+  - MUI Select value mismatch
+  - cached average availability
+
