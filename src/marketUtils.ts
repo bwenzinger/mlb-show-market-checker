@@ -802,16 +802,36 @@ function listingMatchesNormalizedSearch(
   listing: Listing,
   normalizedNeedle: string
 ): boolean {
-  const normalizedName = normalizeSearchText(
-    [listing.listing_name, listing.item?.name].filter(Boolean).join(' ')
+  const searchableText = normalizeSearchText(
+    [
+      listing.listing_name,
+      listing.item?.name,
+      listing.item?.series,
+      getListingTypeLabel(listing),
+      listing.item?.type,
+    ]
+      .filter(Boolean)
+      .join(' ')
   );
+  const compactSearchableText = compactSearchText(searchableText);
 
   return (
-    normalizedName.includes(normalizedNeedle) ||
-    compactSearchText(normalizedName).includes(
-      compactSearchText(normalizedNeedle)
-    )
+    searchableText.includes(normalizedNeedle) ||
+    compactSearchableText.includes(compactSearchText(normalizedNeedle)) ||
+    normalizedNeedle
+      .split(/\s+/)
+      .every((token) => searchTokenMatches(searchableText, token))
   );
+}
+
+function searchTokenMatches(searchableText: string, token: string): boolean {
+  if (searchableText.includes(token)) return true;
+
+  if (token.length > 3 && token.endsWith('s')) {
+    return searchableText.includes(token.slice(0, -1));
+  }
+
+  return false;
 }
 
 function filterListingsByPriceRange(
