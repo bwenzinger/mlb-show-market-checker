@@ -56,6 +56,7 @@ Current snapshot (2026-04-20):
 - 2026-04-22: The SearchPanel main filter row includes a visible `Clear all` action that resets pre-query filters (`query`, `itemType`, `rarity`) and post-query filters (`series`, min/max buy/sell, minimum spread) without changing sort settings.
 - Reminder for UI/UX changes: consider the actual page layout and user workflow before choosing where controls live; make smart, reasonable placement and behavior decisions from the user's perspective rather than simply adding controls wherever the code is easiest.
 - 2026-04-22: The sort dropdown now uses the app's effective default sort (`Overall` / `rank`) when no `sort` query param exists, and the control has a minimum width so it does not collapse before the user picks a sort.
+- 2026-04-23: Sort and series select values are normalized before passing them to MUI Select controls. This avoids out-of-range select errors when URL params are missing, invalid, or differ only by case from dynamic options such as `World Baseball Classic`.
 - Existing build note:
   - Vite reports a chunk-size warning because the main JS bundle is larger than 500 kB after minification.
 

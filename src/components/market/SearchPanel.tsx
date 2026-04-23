@@ -30,6 +30,7 @@ import {
   getListingSortMetric,
   isUsingQuickSellFallback,
   itemTypeOptions,
+  normalizeSort,
   rarityOptions,
   resolveSortDirection,
   titleCase,
@@ -57,11 +58,11 @@ function toNonNegativeQueryValue(value: string): string | undefined {
   return String(Math.max(Math.trunc(parsed), 0));
 }
 
-function includesSeriesOption(options: string[], value: string | undefined) {
+function getMatchingSeriesOption(options: string[], value: string | undefined) {
   const normalizedValue = value?.trim().toLowerCase();
-  if (!normalizedValue) return true;
+  if (!normalizedValue) return undefined;
 
-  return options.some(
+  return options.find(
     (option) => option.trim().toLowerCase() === normalizedValue
   );
 }
@@ -186,7 +187,7 @@ export const SearchPanel = function SearchPanel({
     listingState === 'loading' && listings.length === 0;
   const showRefreshingOverlay =
     listingState === 'loading' && listings.length > 0;
-  const activeSort: SortKey = params?.sort ?? 'rank';
+  const activeSort = normalizeSort(params?.sort);
   const activeSortDirection = resolveSortDirection(
     activeSort,
     params?.sortDirection
@@ -223,12 +224,15 @@ export const SearchPanel = function SearchPanel({
     params?.maxSellNow,
     params?.series,
   ].filter(Boolean).length;
-  const seriesSelectOptions = includesSeriesOption(
-    seriesOptions,
-    params?.series
-  )
-    ? seriesOptions
-    : [params.series ?? '', ...seriesOptions];
+  const selectedSeriesValue =
+    getMatchingSeriesOption(seriesOptions, params?.series) ??
+    params?.series ??
+    '';
+  const seriesSelectOptions =
+    selectedSeriesValue &&
+    !seriesOptions.some((option) => option === selectedSeriesValue)
+      ? [selectedSeriesValue, ...seriesOptions]
+      : seriesOptions;
   const clearAllFilters = () => {
     setQueryParams({
       itemType: undefined,
@@ -302,7 +306,7 @@ export const SearchPanel = function SearchPanel({
               series: event.target.value,
             })
           }
-          value={params?.series ?? ''}
+          value={selectedSeriesValue}
         >
           <MenuItem value="">All</MenuItem>
           {seriesSelectOptions.map((series) => (

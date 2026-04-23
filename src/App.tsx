@@ -12,12 +12,12 @@ import {
   filterListingsForSpreadSort,
   sortListingsByStandardMetric,
   getListingPrices,
+  normalizeSort,
 } from './marketUtils';
 import {
   fetchStoredOrderAverages,
   type Listing,
   type StoredOrderAverage,
-  type SortKey,
   type SortOrder,
 } from './showApi';
 import { useQueryParams } from './components/market/common/useQueryParams';
@@ -88,7 +88,7 @@ function getSeriesOptions(listings: Listing[]): string[] {
 
 export default function App() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
-  const activeSort: SortKey = params?.sort ?? 'rank';
+  const activeSort = normalizeSort(params?.sort);
   const sortDirection: SortOrder =
     params?.sortDirection ?? getDefaultSortDirection(activeSort);
   // const initialFilters = useMemo(readFiltersFromUrl, []);

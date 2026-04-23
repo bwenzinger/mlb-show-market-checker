@@ -71,6 +71,7 @@ export const ALL_ORDER_LOOKBACK_DAYS = 3650;
 export const DEFAULT_TIMELINE_WINDOW_MS = 6 * 60 * 60 * 1000;
 export const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
 export const DEFAULT_SORT: SortKey = 'spread_percentage';
+export const DEFAULT_LIST_SORT: SortKey = 'rank';
 
 const LISTING_CACHE_MS = 5 * 60_000;
 const LISTING_CACHE_STORAGE_KEY = 'mlb-show-market-catalog-v2';
@@ -378,6 +379,12 @@ export function isSpreadSort(
 
 export function doesSortMetricUseQuickSell(sort?: SortKey): boolean {
   return sort === 'best_buy_price' || isSpreadSort(sort);
+}
+
+export function normalizeSort(value: string | undefined): SortKey {
+  return sortOptions.some((option) => option.value === value)
+    ? (value as SortKey)
+    : DEFAULT_LIST_SORT;
 }
 
 export function getListingSortMetric(
