@@ -139,7 +139,8 @@ export default function App() {
         previousFetch === null ||
         previousFetch.itemType !== params.itemType ||
         previousFetch.query !== params.query ||
-        previousFetch.rarity !== params.rarity;
+        previousFetch.rarity !== params.rarity ||
+        previousFetch.series !== params.series;
 
       setListingState((current) =>
         current === 'ready' && !needsNewFetch ? 'ready' : 'loading'
@@ -154,6 +155,7 @@ export default function App() {
               itemType: params?.itemType,
               name: params?.query ? params.query.trim() : undefined,
               rarity: params?.rarity || undefined,
+              series: params?.series,
             }),
             fetchStoredOrderAverages().catch(
               () => new Map<string, StoredOrderAverage>()
@@ -184,6 +186,7 @@ export default function App() {
             itemType: params?.itemType,
             query: params?.query,
             rarity: params?.rarity,
+            series: params?.series,
           };
         }
 

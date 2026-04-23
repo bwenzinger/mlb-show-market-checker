@@ -1,4 +1,5 @@
 import {
+  fetchItems,
   fetchListings,
   type ApiSortKey,
   type CompletedOrder,
@@ -6,6 +7,7 @@ import {
   MARKET_ITEM_TYPES,
   type Listing,
   type ListingPriceHistoryPoint,
+  type ShowItem,
   type SortKey,
   type SortOrder,
 } from './showApi';
@@ -137,6 +139,10 @@ const fullListingsCache = new Map<
   { expiresAt: number; promise: Promise<Listing[]> }
 >();
 let listingsRefreshPromise: Promise<Listing[]> | null = null;
+const itemCatalogCache = new Map<
+  ItemType,
+  { expiresAt: number; promise: Promise<ShowItem[]> }
+>();
 
 export function normalizePriceHistory(
   points: ListingPriceHistoryPoint[]
@@ -339,18 +345,27 @@ export async function fetchListingsByTypeAndRarity({
   itemType,
   name,
   rarity,
+  series,
 }: {
   itemType?: ItemType | '';
   minSpreadForPercent?: number;
   name?: string;
   rarity?: string;
+  series?: string;
   sort?: SortKey;
 }): Promise<Listing[]> {
   const normalizedName = normalizeSearchText(name ?? '');
-  const allListings = await fetchAllListings({
+  const marketListings = await fetchAllListings({
     itemType,
     rarity,
   });
+  const catalogSeries = normalizeSeriesValue(series)
+    ? series
+    : inferCatalogSeriesFromSearch(marketListings, normalizedName);
+  const allListings =
+    shouldSupplementPlayerCatalog(itemType, catalogSeries)
+      ? await mergePlayerCatalogListings(marketListings, catalogSeries)
+      : marketListings;
   const matchingListings = allListings.filter(
     (listing) =>
       listingMatchesItemType(listing, itemType) &&
@@ -444,12 +459,13 @@ export function getListingPrices(listing: Listing): {
   buyNow: number | null;
   sellNow: number | null;
 } {
-  const marketSellNow = toNumber(listing.best_buy_price);
+  const marketBuyNow = toPositivePrice(listing.best_sell_price);
+  const marketSellNow = toPositivePrice(listing.best_buy_price);
 
   return {
-    buyNow: toNumber(listing.best_sell_price),
+    buyNow: marketBuyNow,
     sellNow:
-      marketSellNow !== null && marketSellNow > 0
+      marketSellNow !== null
         ? marketSellNow
         : getQuickSellValue(listing),
   };
@@ -576,6 +592,11 @@ function toNumber(value: unknown): number | null {
     typeof value === 'string' ? value.replace(/,/g, '') : value;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toPositivePrice(value: unknown): number | null {
+  const parsed = toNumber(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
 }
 
 function average(values: number[]): number | null {
@@ -780,6 +801,129 @@ async function fetchAllListingsForType(
   return [...(firstResponse.listings ?? []), ...remainingListings.flat()];
 }
 
+async function fetchAllItemsForType(type: ItemType): Promise<ShowItem[]> {
+  const now = Date.now();
+  const cached = itemCatalogCache.get(type);
+
+  if (cached && cached.expiresAt > now) {
+    return cached.promise;
+  }
+
+  const promise = fetchAllItemsForTypeUncached(type);
+  itemCatalogCache.set(type, {
+    expiresAt: now + LISTING_CACHE_MS,
+    promise,
+  });
+
+  return promise;
+}
+
+async function fetchAllItemsForTypeUncached(type: ItemType): Promise<ShowItem[]> {
+  const firstResponse = await fetchItems({
+    page: 1,
+    type,
+  });
+
+  if (firstResponse.total_pages <= 1) {
+    return firstResponse.items ?? [];
+  }
+
+  const totalPages = Math.max(Number(firstResponse.total_pages) || 1, 1);
+  const remainingPages = Array.from(
+    { length: totalPages - 1 },
+    (_, index) => index + 2
+  );
+  const remainingItems = await mapWithConcurrency(
+    remainingPages,
+    6,
+    async (page) => {
+      const response = await fetchItems({
+        page,
+        type,
+      });
+
+      return response.items ?? [];
+    }
+  );
+
+  return [...(firstResponse.items ?? []), ...remainingItems.flat()];
+}
+
+async function mergePlayerCatalogListings(
+  marketListings: Listing[],
+  series: string | undefined
+): Promise<Listing[]> {
+  const normalizedSeries = normalizeSeriesValue(series);
+  if (!normalizedSeries) return marketListings;
+
+  const catalogItems = await fetchAllItemsForType('mlb_card');
+  const listingsByUuid = new Map<string, Listing>();
+
+  for (const listing of marketListings) {
+    const uuid = listing.item?.uuid;
+    if (uuid) {
+      listingsByUuid.set(uuid, listing);
+    }
+  }
+
+  for (const item of catalogItems) {
+    if (!item.uuid) continue;
+    if (normalizeSeriesValue(item.series) !== normalizedSeries) continue;
+    if (listingsByUuid.has(item.uuid)) continue;
+
+    listingsByUuid.set(item.uuid, {
+      best_buy_price: null,
+      best_sell_price: null,
+      item,
+      listing_name: item.name ?? null,
+    });
+  }
+
+  return [...listingsByUuid.values()];
+}
+
+function shouldSupplementPlayerCatalog(
+  itemType: ItemType | '' | undefined,
+  series: string | undefined
+): boolean {
+  return (
+    (!itemType || itemType === 'mlb_card') &&
+    Boolean(normalizeSeriesValue(series))
+  );
+}
+
+function inferCatalogSeriesFromSearch(
+  listings: Listing[],
+  normalizedNeedle: string
+): string | undefined {
+  if (!normalizedNeedle) return undefined;
+
+  const seriesByKey = new Map<string, string>();
+
+  for (const listing of listings) {
+    const series = listing.item?.series?.trim();
+    if (!series) continue;
+
+    const normalizedSeries = normalizeSearchText(series);
+    if (normalizedSeries && !seriesByKey.has(normalizedSeries)) {
+      seriesByKey.set(normalizedSeries, series);
+    }
+  }
+
+  const compactNeedle = compactSearchText(normalizedNeedle);
+
+  return [...seriesByKey.entries()]
+    .sort((a, b) => b[0].length - a[0].length)
+    .find(([normalizedSeries]) => {
+      const compactSeries = compactSearchText(normalizedSeries);
+
+      return (
+        normalizedNeedle.includes(normalizedSeries) ||
+        compactNeedle.includes(compactSeries)
+      );
+    })?.[1];
+}
+
 function listingMatchesItemType(
   listing: Listing,
   itemType?: ItemType | ''
@@ -822,6 +966,10 @@ function listingMatchesNormalizedSearch(
       .split(/\s+/)
       .every((token) => searchTokenMatches(searchableText, token))
   );
+}
+
+function normalizeSeriesValue(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
 }
 
 function searchTokenMatches(searchableText: string, token: string): boolean {
@@ -940,6 +1088,8 @@ function listingSpreadSortValue(
 }
 
 function getQuickSellValue(listing: Listing): number | null {
+  if (listing.item?.is_sellable === false) return null;
+
   const itemType = listing.item?.type as ItemType | undefined;
 
   if (itemType === 'mlb_card') {

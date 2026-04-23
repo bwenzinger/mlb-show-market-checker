@@ -60,13 +60,14 @@ URL state and query params
 
 List data flow
 - On first load, even with an empty URL, `App.tsx` must fetch listing data. Do not regress this; the previous failure mode was an empty initial list because "previous fetch" and current params were all undefined.
-- `App.tsx` decides whether to fetch new listing data by comparing `itemType`, `query`, and `rarity` against the previous fetch key.
+- `App.tsx` decides whether to fetch new list data by comparing `itemType`, `query`, `rarity`, and `series` against the previous fetch key.
 - `itemType` and `rarity` reduce API work:
   - If `itemType` is selected, only that type is fetched.
   - If `itemType` is empty, all market item types are fetched.
   - `rarity` is passed to the listing API calls.
 - Search text currently participates in the fetch key, then matching is applied locally after fetched listing pages are loaded.
-- Post-query filters (`series`, min/max buy/sell, and spread minimum) should reuse the current fetched listing array instead of triggering new listing API fetches.
+- Post-query filters (`series`, min/max buy/sell, and spread minimum) should reuse the current fetched listing array for normal filtering work.
+- Series is still applied locally, but player-card series views need one extra data source: when a player/all-type series filter is selected, or when the search text clearly names a series, `fetchListingsByTypeAndRarity` supplements market listings with matching `items.json` catalog cards. This is required because `/listings.json` only contains market/sellable listings, while complete series checklists can include non-sellable cards.
 - `App.tsx` stores the fetched/enriched list in `allListings`, applies post-query filters and sorting, then sets `filteredListings` for `SearchPanel`.
 
 Search behavior
@@ -81,6 +82,7 @@ Search behavior
 - Compact matching supports no-space variants.
 - Token fallback supports phrases like `spring breakout cards` matching cards whose series is `Spring Breakout` and type label is `MLB Card`.
 - This exists because series searches such as "Spring Breakout cards" should not depend on player names containing the words "Spring Breakout".
+- If search text contains a known series phrase, player-card results are supplemented from `items.json` so complete set/checklist searches include non-sellable catalog cards too.
 
 Type, rarity, and series filtering
 - Main type options:
@@ -99,6 +101,7 @@ Type, rarity, and series filtering
   - common
 - Series is a post-query filter shown in the filter drawer.
 - Series options are derived dynamically from the current fetched listing set. Do not hard-code the series list; new API values should appear automatically.
+- Player-card series lists can include catalog-only cards from `/api/show/items.json`. These rows have no market buy-now/sell-now price and should sort to the bottom of price sorts.
 - Example series values seen locally: `2nd Half Heroes`, `All-Star`, `Awards`, `Breakout`, `Contributor`, `Default`, `Egg Hunt`, `Last Ride`, `Live`, `New Threads`, `Postseason`, `Spotlight`, `Spring Breakout`, `St. Patrick's Day`, `Standout`, `Topps Now`, `Veteran`, `World Baseball Classic`.
 - Type changes clear `series`, because non-player types currently often return `series: Default`; a stale `series=Live` can make Equipment/Stadium/etc. look empty.
 - `App.tsx` also drops stale series params when the newly fetched result set does not contain that series.
@@ -128,6 +131,7 @@ Price, spread, profit, and quick-sell logic
   - `buyNow`: `best_sell_price`
   - `sellNow`: `best_buy_price`, unless missing/0 and a quick-sell fallback exists.
 - Quick-sell fallback exists for player cards and supported non-player item types/rarities.
+- Do not apply quick-sell fallback to cards where `item.is_sellable === false`; those catalog-only/non-sellable cards should show missing market prices rather than fake sell-now values.
 - `isUsingQuickSellFallback` drives the `QuickSellBadge`.
 - Spread is `buyNow - sellNow`, floored at 0.
 - Sale tax is 10%.
@@ -206,6 +210,7 @@ Backend behavior
 - API routes:
   - `GET /api/health`: ok, collection state, row counts, last run.
   - `GET /api/show/listings.json`: proxy to MLB The Show listings API.
+  - `GET /api/show/items.json`: proxy to MLB The Show item catalog API.
   - `GET /api/show/listing.json`: proxy detail API and persist completed orders from the response.
   - `GET /api/cards/:uuid/orders?days=N`: stored completed orders for one card/item.
   - `GET /api/cards/averages`: all cached average rows.
@@ -218,6 +223,8 @@ Backend behavior
 
 Data and API notes
 - MLB item types used by the app: `mlb_card`, `stadium`, `equipment`, `sponsorship`, `unlockable`.
+- `/api/show/listings.json` proxies market listings and omits non-sellable catalog-only cards.
+- `/api/show/items.json` proxies the broader item catalog. Use it when a player-card series/checklist view needs to show every card, including non-sellable cards with no current market price.
 - Non-player types can have different metadata fields than player cards. Use optional access patterns and shared helpers.
 - Equipment, Sponsorships, Stadiums, and Unlockables commonly have `series: Default`; this matters when thinking about series filters.
 - The frontend API client builds paths from `VITE_BACKEND_API_BASE`, `VITE_SHOW_API_BASE`, and `VITE_HISTORY_API_BASE` when present; otherwise it uses same-origin `/api/show` and `/api`.
@@ -261,4 +268,3 @@ Verification expectations
   - sort normalization
   - MUI Select value mismatch
   - cached average availability
-

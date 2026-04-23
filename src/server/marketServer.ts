@@ -320,6 +320,10 @@ function startHttpServer() {
     await sendShowApiJson(req, res, "/listings.json");
   });
 
+  app.get("/api/show/items.json", async (req, res) => {
+    await sendShowApiJson(req, res, "/items.json");
+  });
+
   app.get("/api/show/listing.json", async (req, res) => {
     await sendShowListingJson(req, res);
   });
@@ -430,7 +434,7 @@ function cors(req: Request, res: Response, next: NextFunction) {
 async function sendShowApiJson(
   req: Request,
   res: Response,
-  path: "/listing.json" | "/listings.json",
+  path: "/items.json" | "/listing.json" | "/listings.json",
 ) {
   try {
     const json = await requestJson<unknown>(path, toShowSearchParams(req.query));

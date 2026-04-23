@@ -80,6 +80,13 @@ export interface ListingsResponse {
   listings: Listing[];
 }
 
+export interface ItemsResponse {
+  page: number;
+  per_page: number;
+  total_pages: number;
+  items: ShowItem[];
+}
+
 const BACKEND_API_BASE = import.meta.env.VITE_BACKEND_API_BASE as
   | string
   | undefined;
@@ -122,6 +129,19 @@ export async function fetchListings({
     rarity,
     sort,
     order,
+  });
+}
+
+export async function fetchItems({
+  page = 1,
+  type = "mlb_card",
+}: {
+  page?: number;
+  type?: ItemType;
+} = {}): Promise<ItemsResponse> {
+  return requestJson<ItemsResponse>("/items.json", {
+    type,
+    page,
   });
 }
 
