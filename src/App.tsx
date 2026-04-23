@@ -16,6 +16,7 @@ import {
 } from './marketUtils';
 import {
   fetchStoredOrderAverages,
+  fetchStoredOrderLiquidities,
   type Listing,
   type StoredOrderAverage,
   type SortOrder,
@@ -150,7 +151,11 @@ export default function App() {
         let nextListings: Listing[];
 
         if (needsNewFetch) {
-          const [fetchedListings, storedOrderAverages] = await Promise.all([
+          const [
+            fetchedListings,
+            storedOrderAverages,
+            storedOrderLiquidities,
+          ] = await Promise.all([
             fetchListingsByTypeAndRarity({
               itemType: params?.itemType,
               name: params?.query ? params.query.trim() : undefined,
@@ -160,12 +165,16 @@ export default function App() {
             fetchStoredOrderAverages().catch(
               () => new Map<string, StoredOrderAverage>()
             ),
+            fetchStoredOrderLiquidities().catch(() => new Map()),
           ]);
 
           nextListings = fetchedListings.map((listing) => {
             const uuid = listing.item?.uuid;
             const average = uuid
               ? storedOrderAverages.get(uuid)?.averagePrice ?? null
+              : null;
+            const liquidity = uuid
+              ? storedOrderLiquidities.get(uuid) ?? null
               : null;
             const buyNow = getListingPrices(listing).buyNow;
 
@@ -174,6 +183,7 @@ export default function App() {
               allTimeAverage: average,
               buyNowVsAllTimeAverageDiff:
                 average === null || buyNow === null ? null : buyNow - average,
+              storedOrderLiquidity: liquidity,
             };
           });
         } else {

@@ -62,6 +62,7 @@ export const sortOptions: Array<{ label: string; value: SortKey }> = [
   { label: 'Buy now', value: 'best_sell_price' },
   { label: 'Sell now', value: 'best_buy_price' },
   { label: 'Buy now vs avg', value: 'buy_now_vs_all_time_average_diff' },
+  { label: 'Profit/hr', value: 'profit_per_hour' },
   { label: 'Spread', value: 'spread_number' },
   { label: 'Spread %', value: 'spread_percentage' },
   { label: 'Profit', value: 'profit' },
@@ -78,6 +79,7 @@ export const DEFAULT_LIST_SORT: SortKey = 'rank';
 const LISTING_CACHE_MS = 5 * 60_000;
 const LISTING_CACHE_STORAGE_KEY = 'mlb-show-market-catalog-v2';
 const SALE_TAX_RATE = 0.1;
+const PROFIT_PER_HOUR_HANDLING_HOURS = 0.05;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
   { maxOvr: 64, live: 5, nonLive: 2 },
   { maxOvr: 74, live: 25, nonLive: 12 },
@@ -223,6 +225,11 @@ export function formatPercent(value: number | null): string {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
   })}%`;
+}
+
+export function formatPerHour(value: number | null): string {
+  if (value === null) return '-';
+  return `${formatStubs(value)}/hr`;
 }
 
 export function titleCase(value: string): string {
@@ -424,6 +431,13 @@ export function getListingSortMetric(
     return { label: 'Sell now', value: formatStubs(prices.sellNow) };
   }
 
+  if (sort === 'profit_per_hour') {
+    return {
+      label: 'Profit/hr',
+      value: formatPerHour(getListingProfitPerHour(listing)),
+    };
+  }
+
   if (sort === 'spread_number') {
     return {
       label: 'Spread',
@@ -459,8 +473,8 @@ export function getListingPrices(listing: Listing): {
   buyNow: number | null;
   sellNow: number | null;
 } {
-  const marketBuyNow = toPositivePrice(listing.best_sell_price);
-  const marketSellNow = toPositivePrice(listing.best_buy_price);
+  const { buyNow: marketBuyNow, sellNow: marketSellNow } =
+    getListingMarketPrices(listing);
 
   return {
     buyNow: marketBuyNow,
@@ -469,6 +483,49 @@ export function getListingPrices(listing: Listing): {
         ? marketSellNow
         : getQuickSellValue(listing),
   };
+}
+
+function getListingMarketPrices(listing: Listing): {
+  buyNow: number | null;
+  sellNow: number | null;
+} {
+  return {
+    buyNow: toPositivePrice(listing.best_sell_price),
+    sellNow: toPositivePrice(listing.best_buy_price),
+  };
+}
+
+export function getListingProfitPerHour(listing: Listing): number | null {
+  const prices = getListingMarketPrices(listing);
+  const profit = calculateProfit(prices);
+  const liquidity = listing.storedOrderLiquidity;
+  const buyFillRatePerHour = liquidity?.buyFillRatePerHour ?? null;
+  const sellFillRatePerHour = liquidity?.sellFillRatePerHour ?? null;
+  const confidence = liquidity?.confidence ?? null;
+
+  if (
+    profit === null ||
+    profit <= 0 ||
+    buyFillRatePerHour === null ||
+    sellFillRatePerHour === null ||
+    buyFillRatePerHour <= 0 ||
+    sellFillRatePerHour <= 0 ||
+    confidence === null ||
+    confidence <= 0
+  ) {
+    return null;
+  }
+
+  const cycleHours =
+    1 / buyFillRatePerHour +
+    1 / sellFillRatePerHour +
+    PROFIT_PER_HOUR_HANDLING_HOURS;
+
+  if (!Number.isFinite(cycleHours) || cycleHours <= 0) {
+    return null;
+  }
+
+  return (profit / cycleHours) * confidence;
 }
 
 export function isUsingQuickSellFallback(listing: Listing): boolean {
@@ -724,6 +781,10 @@ function listingStandardSortValue(
 ): number | null {
   if (sort === 'buy_now_vs_all_time_average_diff') {
     return listing.buyNowVsAllTimeAverageDiff ?? null;
+  }
+
+  if (sort === 'profit_per_hour') {
+    return getListingProfitPerHour(listing);
   }
 
   if (sort === 'best_sell_price') {

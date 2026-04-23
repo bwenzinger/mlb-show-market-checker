@@ -112,6 +112,7 @@ Sorting
   - Buy now (`best_sell_price`)
   - Sell now (`best_buy_price`)
   - Buy now vs avg (`buy_now_vs_all_time_average_diff`)
+  - Profit/hr (`profit_per_hour`)
   - Spread (`spread_number`)
   - Spread % (`spread_percentage`)
   - Profit (`profit`)
@@ -125,6 +126,7 @@ Sorting
   - all other sorts default descending.
 - The sort dropdown has a minimum width and should not collapse before a user picks a value.
 - `Buy now vs avg` relies on cached all-time averages from `market_card_averages`.
+- `Profit/hr` is a liquidity-aware flip sort. It should use cached stored-order liquidity inputs plus the current live listing prices, not raw full-history scans in the browser.
 
 Price, spread, profit, and quick-sell logic
 - `getListingPrices` in `src/marketUtils.ts` returns:
@@ -137,6 +139,24 @@ Price, spread, profit, and quick-sell logic
 - Sale tax is 10%.
 - Profit is spread minus 10% of buy-now.
 - Profit percentage is profit divided by sell-now.
+- `Profit/hr` should only use actual market buy-now/sell-now prices. Do not use quick-sell fallback for this metric; a card with no live buy side is not an active flip target.
+- Cached liquidity inputs come from `market_card_liquidity`:
+  - `buyMatchCount`
+  - `sellMatchCount`
+  - `buyFillRatePerHour`
+  - `sellFillRatePerHour`
+  - `windowHours`
+  - `confidence`
+- The current formula is an adjusted expected flip rate:
+  - compute current profit from live market buy/sell prices
+  - compute expected cycle time as `(1 / buyFillRatePerHour) + (1 / sellFillRatePerHour) + handlingHours`
+  - multiply the resulting raw profit/hour by cached confidence
+- Liquidity window selection:
+  - prefer 24h if both buy and sell match counts are at least 3
+  - otherwise fall back to 7d
+- Liquidity price matching uses a band of `max(50 stubs, 2% of the reference price)` around:
+  - current `best_buy_price` for buy-fill matches
+  - current `best_sell_price` for sell-fill matches
 - Sort/list metric rendering should keep using the shared helpers so quick-sell behavior is consistent everywhere.
 
 SearchPanel UX
@@ -189,6 +209,16 @@ Cached average source of truth
 - Startup warms `market_card_averages` once if the table is empty and stored orders already exist. The first server start after introducing or clearing the table may pause while warming.
 - Collection and on-demand detail refresh update each affected card's cached average after new orders are inserted, or if an average row does not exist yet.
 
+Cached liquidity source of truth
+- The source of truth for list-level liquidity inputs is the backend SQLite table `market_card_liquidity`.
+- This cache exists so `Profit/hr` sorting can stay fast without running one raw-order aggregation per card in the browser.
+- Frontend list sorting should fetch cached liquidity rows from:
+  - `/api/cards/liquidity`
+- Backend can also expose:
+  - `/api/cards/:uuid/liquidity`
+- Collection and on-demand detail refresh should refresh cached liquidity for the affected UUID so the stored price bands stay aligned with current market prices.
+- Startup should warm `market_card_liquidity` once if the table is empty and local order history already exists.
+
 Backend behavior
 - `src/server/marketServer.ts` loads `.env` if present and reads config through `readConfig`.
 - Default backend config:
@@ -204,6 +234,7 @@ Backend behavior
   - `market_cards`: latest known card/listing metadata and raw JSON.
   - `stored_completed_orders`: normalized completed orders keyed by unique source hash.
   - `market_card_averages`: cached robust all-time averages.
+  - `market_card_liquidity`: cached recent buy/sell match counts, fill rates, and confidence for `Profit/hr`.
   - `collector_runs`: run status and stats.
 - Important indexes:
   - `idx_stored_completed_orders_uuid_time` on `(uuid, order_time)`.
@@ -213,6 +244,8 @@ Backend behavior
   - `GET /api/show/items.json`: proxy to MLB The Show item catalog API.
   - `GET /api/show/listing.json`: proxy detail API and persist completed orders from the response.
   - `GET /api/cards/:uuid/orders?days=N`: stored completed orders for one card/item.
+  - `GET /api/cards/liquidity`: all cached liquidity rows.
+  - `GET /api/cards/:uuid/liquidity`: one cached liquidity row.
   - `GET /api/cards/averages`: all cached average rows.
   - `GET /api/cards/:uuid/average`: one cached average row.
   - `POST /api/collect`: trigger collection.
@@ -233,6 +266,8 @@ Data and API notes
 
 Deployment and server lifecycle
 - The intended always-on Linux setup is a systemd service installed by `scripts/install-systemd-service.sh`.
+- This Windows development machine must not run the long-running backend service. The always-on service role is reserved for the Linux server only.
+- On Windows, use local dev commands only when needed for short-lived verification work. Do not leave the backend/dev server running as a persistent service on this computer.
 - Service name defaults to `mlb-show-market-checker`.
 - `start.sh` runs the backend server with `tsx src/server/marketServer.ts`.
 - Deploy-on-push uses `.github/workflows/deploy-home-server.yml` on a self-hosted Linux runner.

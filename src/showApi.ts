@@ -17,6 +17,7 @@ export type ApiSortKey = "rank" | "best_sell_price" | "best_buy_price";
 export type SortKey =
   | ApiSortKey
   | "buy_now_vs_all_time_average_diff"
+  | "profit_per_hour"
   | "spread_number"
   | "spread_percentage"
   | "profit"
@@ -65,12 +66,25 @@ export interface Listing {
   item?: ShowItem | null;
   price_history?: ListingPriceHistoryPoint[];
   completed_orders?: CompletedOrder[];
+  storedOrderLiquidity?: StoredOrderLiquidity | null;
 }
 
 export interface StoredOrderAverage {
   averagePrice: number | null;
   orderCount: number;
   uuid: string;
+}
+
+export interface StoredOrderLiquidity {
+  buyFillRatePerHour: number | null;
+  buyMatchCount: number;
+  confidence: number;
+  computedAt: string;
+  recentOrderCount: number;
+  sellFillRatePerHour: number | null;
+  sellMatchCount: number;
+  uuid: string;
+  windowHours: number;
 }
 
 export interface ListingsResponse {
@@ -105,6 +119,10 @@ const STORED_ORDER_AVERAGES_CACHE_MS = 60_000;
 let storedOrderAveragesCache: {
   expiresAt: number;
   promise: Promise<Map<string, StoredOrderAverage>>;
+} | null = null;
+let storedOrderLiquidityCache: {
+  expiresAt: number;
+  promise: Promise<Map<string, StoredOrderLiquidity>>;
 } | null = null;
 
 export async function fetchListings({
@@ -226,6 +244,57 @@ export async function fetchStoredOrderAverages({
   })();
 
   storedOrderAveragesCache = {
+    expiresAt: now + STORED_ORDER_AVERAGES_CACHE_MS,
+    promise,
+  };
+
+  return promise;
+}
+
+export async function fetchStoredOrderLiquidities({
+  forceRefresh = false,
+}: {
+  forceRefresh?: boolean;
+} = {}): Promise<Map<string, StoredOrderLiquidity>> {
+  if (!HISTORY_API_ENABLED) {
+    return new Map();
+  }
+
+  const now = Date.now();
+  if (
+    !forceRefresh &&
+    storedOrderLiquidityCache &&
+    storedOrderLiquidityCache.expiresAt > now
+  ) {
+    return storedOrderLiquidityCache.promise;
+  }
+
+  const promise = (async () => {
+    const url = new URL(
+      `${trimTrailingSlash(HISTORY_API_BASE)}/cards/liquidity`,
+      window.location.href
+    );
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Local history API returned HTTP ${response.status}`);
+    }
+
+    const json = (await response.json()) as {
+      liquidity?: StoredOrderLiquidity[];
+    };
+
+    return new Map(
+      (json.liquidity ?? []).map((entry) => [entry.uuid, entry])
+    );
+  })();
+
+  storedOrderLiquidityCache = {
     expiresAt: now + STORED_ORDER_AVERAGES_CACHE_MS,
     promise,
   };
