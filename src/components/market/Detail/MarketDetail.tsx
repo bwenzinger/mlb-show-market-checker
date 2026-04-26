@@ -21,10 +21,11 @@ import {
   bucketOrdersByHour,
   calculateProfit,
   calculateProfitPercentage,
-  calculateSpread,
+  formatPerHour,
   formatStubs,
   getListingDetailSummary,
   getListingEyebrow,
+  getListingProfitPerHour,
   getListingPrices,
   isUsingQuickSellFallback,
   normalizeOrders,
@@ -34,11 +35,13 @@ import {
   type OrderBucket,
   type OrderPoint,
   type PricePoint,
+  type ProfitPerHourOptions,
 } from '../../../marketUtils';
 import {
   fetchListingByUuid,
   fetchStoredOrderAverage,
   fetchStoredCompletedOrders,
+  fetchStoredOrderLiquidity,
   type CompletedOrder,
   type Listing,
   type StoredOrderAverage,
@@ -56,6 +59,17 @@ import { AllCompletedOrdersTableSection } from './AllCompletedOrdersTableSection
 import { MarketDetailView } from './MarketDetailView';
 import { useQueryParams } from '../common/useQueryParams';
 import { FilterUrlParams } from '../../../types';
+
+function parsePositiveQueryInteger(
+  value: string | undefined
+): number | undefined {
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+
+  return Math.trunc(parsed);
+}
 
 export function MarketDetail() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
@@ -78,6 +92,15 @@ export function MarketDetail() {
   const [completedOrderPage, setCompletedOrderPage] = useState(0);
   const [completedOrderRowsPerPage, setCompletedOrderRowsPerPage] =
     useState(25);
+  const profitPerHourOptions: ProfitPerHourOptions = useMemo(
+    () => ({
+      activeFlipSlots: parsePositiveQueryInteger(
+        params?.profitHrActiveFlipSlots
+      ),
+      stubBudget: parsePositiveQueryInteger(params?.profitHrStubBudget),
+    }),
+    [params?.profitHrActiveFlipSlots, params?.profitHrStubBudget]
+  );
 
   useEffect(() => {
     setCompletedOrderPage(0);
@@ -191,9 +214,15 @@ export function MarketDetail() {
       if (!params?.uuid) return;
       try {
         const listing = await fetchListingByUuid(params?.uuid);
+        const liquidity = await fetchStoredOrderLiquidity({
+          uuid: params.uuid,
+        }).catch(() => null);
         if (!active) return;
 
-        setSelectedListing(listing);
+        setSelectedListing({
+          ...listing,
+          storedOrderLiquidity: liquidity,
+        });
         setDetailState('ready');
         void loadAverage();
         void loadRecentOrders();
@@ -325,9 +354,12 @@ export function MarketDetail() {
   const earliestAllOrder = allCompletedOrders[0]?.label ?? 'Not returned';
   const latestAllOrder =
     allCompletedOrders[allCompletedOrders.length - 1]?.label ?? 'Not returned';
-  const currentSpread = calculateSpread(selectedPrices);
   const currentProfit = calculateProfit(selectedPrices);
   const currentProfitPercentage = calculateProfitPercentage(selectedPrices);
+  const currentProfitPerHour =
+    detailListing === null
+      ? null
+      : getListingProfitPerHour(detailListing, profitPerHourOptions);
   const completedOrdersSource =
     storedRecentOrderPoints.length > 0 ? 'Local database' : 'Live API sample';
   const allCompletedOrdersSource =
@@ -352,7 +384,7 @@ export function MarketDetail() {
       completedOrdersSource={completedOrdersSource}
       currentProfit={currentProfit}
       currentProfitPercentage={currentProfitPercentage}
-      currentSpread={currentSpread}
+      currentProfitPerHourLabel={formatPerHour(currentProfitPerHour)}
       detailError={detailError}
       detailState={detailState}
       allTimeAverage={allTimeAverage}

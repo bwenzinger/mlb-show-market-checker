@@ -194,6 +194,7 @@ Market detail workflow
 - Detail loading sequence:
   - fetch live listing detail via `fetchListingByUuid`
   - fetch cached all-time average via `/api/cards/:uuid/average`
+  - fetch cached liquidity via `/api/cards/:uuid/liquidity` for the detail `Profit/hr` card
   - fetch recent stored completed orders using `RECENT_ORDER_LOOKBACK_DAYS` (7 days)
   - fetch long-term stored completed orders using `ALL_ORDER_LOOKBACK_DAYS` (3650 days)
 - Recent/all-order fetches fall back to the live API sample if local history is unavailable or empty.
@@ -201,9 +202,10 @@ Market detail workflow
   - Buy now
   - Sell now
   - Profit
-  - Spread
+  - Profit/hr
   - All time average
   - 7-day trend
+- The detail `Profit/hr` card must use the same shared calculation and URL params (`profitHrActiveFlipSlots`, `profitHrStubBudget`) as list sorting/rendering.
 - `All time average` must come from the cached average API/table, not from recomputing all orders in the frontend.
 - The all-time average card also shows a signed `current +/-N` badge representing current buy-now vs cached all-time average.
 - `7-day trend` is derived from price history over the latest 7-day window.

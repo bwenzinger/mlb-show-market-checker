@@ -36,7 +36,7 @@ interface MarketDetailViewProps {
   completedOrdersSource: string;
   currentProfit: number | null;
   currentProfitPercentage: number | null;
-  currentSpread: number | null;
+  currentProfitPerHourLabel: string;
   detailError: string;
   detailState: LoadState;
   allTimeAverage: number | null;
@@ -73,7 +73,7 @@ export function MarketDetailView({
   completedOrdersSource,
   currentProfit,
   currentProfitPercentage,
-  currentSpread,
+  currentProfitPerHourLabel,
   detailError,
   detailState,
   allTimeAverage,
@@ -215,7 +215,7 @@ export function MarketDetailView({
             profit={currentProfit}
             profitPercentage={currentProfitPercentage}
           />
-          <MetricCard label="Spread" value={formatStubs(currentSpread)} />
+          <MetricCard label="Profit/hr" value={currentProfitPerHourLabel} />
           <MetricCard
             badge={
               allTimeAverageDiffLabel ? (

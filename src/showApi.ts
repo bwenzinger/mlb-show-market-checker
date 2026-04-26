@@ -251,6 +251,39 @@ export async function fetchStoredOrderLiquidities(): Promise<
   return new Map((json.liquidity ?? []).map((entry) => [entry.uuid, entry]));
 }
 
+export async function fetchStoredOrderLiquidity({
+  uuid,
+}: {
+  uuid: string;
+}): Promise<StoredOrderLiquidity | null> {
+  if (!HISTORY_API_ENABLED) {
+    return null;
+  }
+
+  const url = new URL(
+    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
+      uuid
+    )}/liquidity`,
+    window.location.href
+  );
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Local history API returned HTTP ${response.status}`);
+  }
+
+  const json = (await response.json()) as {
+    liquidity?: StoredOrderLiquidity | null;
+  };
+
+  return json.liquidity ?? null;
+}
+
 export async function fetchStoredOrderAverage({
   uuid,
 }: {
