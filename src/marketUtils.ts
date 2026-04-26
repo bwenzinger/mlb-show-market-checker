@@ -76,11 +76,12 @@ export const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
 export const DEFAULT_SORT: SortKey = 'spread_percentage';
 export const DEFAULT_LIST_SORT: SortKey = 'rank';
 
-const LISTING_CACHE_MS = 5 * 60_000;
+const LISTING_CACHE_MS = 5 * 60000;
 const LISTING_CACHE_STORAGE_KEY = 'mlb-show-market-catalog-v2';
 const SALE_TAX_RATE = 0.1;
 const PROFIT_PER_HOUR_HANDLING_HOURS = 0.05;
 const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
+const PROFIT_PER_HOUR_STUB_BUDGET = 75000;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
   { maxOvr: 64, live: 5, nonLive: 2 },
   { maxOvr: 74, live: 25, nonLive: 12 },
@@ -370,10 +371,9 @@ export async function fetchListingsByTypeAndRarity({
   const catalogSeries = normalizeSeriesValue(series)
     ? series
     : inferCatalogSeriesFromSearch(marketListings, normalizedName);
-  const allListings =
-    shouldSupplementPlayerCatalog(itemType, catalogSeries)
-      ? await mergePlayerCatalogListings(marketListings, catalogSeries)
-      : marketListings;
+  const allListings = shouldSupplementPlayerCatalog(itemType, catalogSeries)
+    ? await mergePlayerCatalogListings(marketListings, catalogSeries)
+    : marketListings;
   const matchingListings = allListings.filter(
     (listing) =>
       listingMatchesItemType(listing, itemType) &&
@@ -480,9 +480,7 @@ export function getListingPrices(listing: Listing): {
   return {
     buyNow: marketBuyNow,
     sellNow:
-      marketSellNow !== null
-        ? marketSellNow
-        : getQuickSellValue(listing),
+      marketSellNow !== null ? marketSellNow : getQuickSellValue(listing),
   };
 }
 
@@ -499,6 +497,7 @@ function getListingMarketPrices(listing: Listing): {
 export function getListingProfitPerHour(listing: Listing): number | null {
   const prices = getListingMarketPrices(listing);
   const profit = calculateProfit(prices);
+  const acquisitionCost = prices.sellNow;
   const liquidity = listing.storedOrderLiquidity;
   const buyFillRatePerHour = liquidity?.buyFillRatePerHour ?? null;
   const sellFillRatePerHour = liquidity?.sellFillRatePerHour ?? null;
@@ -507,6 +506,8 @@ export function getListingProfitPerHour(listing: Listing): number | null {
   if (
     profit === null ||
     profit <= 0 ||
+    acquisitionCost === null ||
+    acquisitionCost <= 0 ||
     buyFillRatePerHour === null ||
     sellFillRatePerHour === null ||
     buyFillRatePerHour <= 0 ||
@@ -530,8 +531,17 @@ export function getListingProfitPerHour(listing: Listing): number | null {
     buyFillRatePerHour,
     sellFillRatePerHour
   );
+  const budgetLimitedActiveFlipSlots = Math.min(
+    PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS,
+    Math.floor(PROFIT_PER_HOUR_STUB_BUDGET / acquisitionCost)
+  );
+
+  if (budgetLimitedActiveFlipSlots <= 0) {
+    return null;
+  }
+
   const slotLimitedThroughputPerHour =
-    PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS / cycleHours;
+    budgetLimitedActiveFlipSlots / cycleHours;
   const realisticFlipsPerHour = Math.min(
     marketThroughputPerHour,
     slotLimitedThroughputPerHour
@@ -761,7 +771,8 @@ export function sortListingsByStandardMetric(
   >,
   sortDirection?: SortOrder
 ): Listing[] {
-  const direction = resolveSortDirection(sort, sortDirection) === 'asc' ? 1 : -1;
+  const direction =
+    resolveSortDirection(sort, sortDirection) === 'asc' ? 1 : -1;
 
   return listings.slice().sort((a, b) => {
     const aValue = listingStandardSortValue(a, sort);
@@ -891,7 +902,9 @@ async function fetchAllItemsForType(type: ItemType): Promise<ShowItem[]> {
   return promise;
 }
 
-async function fetchAllItemsForTypeUncached(type: ItemType): Promise<ShowItem[]> {
+async function fetchAllItemsForTypeUncached(
+  type: ItemType
+): Promise<ShowItem[]> {
   const firstResponse = await fetchItems({
     page: 1,
     type,
