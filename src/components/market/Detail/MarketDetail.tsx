@@ -58,6 +58,7 @@ import { AllCompletedOrdersChartSection } from './AllCompletedOrdersSection';
 import { AllCompletedOrdersTableSection } from './AllCompletedOrdersTableSection';
 import { MarketDetailView } from './MarketDetailView';
 import { useQueryParams } from '../common/useQueryParams';
+import { useStarredListings } from '../common/useStarredListings';
 import { FilterUrlParams } from '../../../types';
 
 function parsePositiveQueryInteger(
@@ -73,6 +74,7 @@ function parsePositiveQueryInteger(
 
 export function MarketDetail() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+  const { starredUuids, toggleStarred } = useStarredListings();
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [storedCompletedOrders, setStoredCompletedOrders] = useState<
@@ -368,6 +370,9 @@ export function MarketDetail() {
     detailListing?.item?.baked_img_lg ??
     detailListing?.item?.baked_img ??
     detailListing?.item?.img;
+  const selectedUuid = detailListing?.item?.uuid;
+  const selectedIsStarred =
+    selectedUuid !== undefined && starredUuids.has(selectedUuid);
 
   return (
     <MarketDetailView
@@ -399,10 +404,14 @@ export function MarketDetail() {
       recentOrdersState={recentOrdersState}
       safeCompletedOrderPage={safeCompletedOrderPage}
       selectedListing={detailListing}
+      selectedIsStarred={selectedIsStarred}
       selectedName={selectedName}
       setCompletedOrderPage={setCompletedOrderPage}
       setCompletedOrderRowsPerPage={setCompletedOrderRowsPerPage}
       usesQuickSellFallback={usesQuickSellFallback}
+      onToggleSelectedStarred={() => {
+        if (selectedUuid) toggleStarred(selectedUuid);
+      }}
       onRefresh={() => {
         if (!params?.uuid || detailState === 'loading') return;
 

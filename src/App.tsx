@@ -23,6 +23,7 @@ import {
   type SortOrder,
 } from './showApi';
 import { useQueryParams } from './components/market/common/useQueryParams';
+import { useStarredListings } from './components/market/common/useStarredListings';
 import { FilterUrlParams } from './types';
 
 function parseNonNegativeQueryNumber(
@@ -101,9 +102,11 @@ function getSeriesOptions(listings: Listing[]): string[] {
 
 export default function App() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+  const { starredUuids } = useStarredListings();
   const activeSort = normalizeSort(params?.sort);
   const sortDirection: SortOrder =
     params?.sortDirection ?? getDefaultSortDirection(activeSort);
+  const starredOnly = params?.starredOnly === '1';
   const profitPerHourOptions: ProfitPerHourOptions = useMemo(
     () => ({
       activeFlipSlots: parsePositiveQueryInteger(
@@ -236,8 +239,10 @@ export default function App() {
 
         nextListings = nextListings.filter((listing) => {
           const prices = getListingPrices(listing);
+          const uuid = listing.item?.uuid;
 
           return (
+            (!starredOnly || (uuid !== undefined && starredUuids.has(uuid))) &&
             isWithinRange(
               prices.buyNow,
               parseNonNegativeQueryNumber(params?.minBuyNow),
@@ -315,6 +320,8 @@ export default function App() {
     params?.series,
     params?.sort,
     params?.sortDirection,
+    params?.starredOnly,
+    starredUuids,
   ]);
 
   return (

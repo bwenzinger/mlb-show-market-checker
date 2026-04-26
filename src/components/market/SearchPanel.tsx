@@ -20,6 +20,7 @@ import {
   SvgIcon,
   TextField,
   Tooltip,
+  ToggleButton,
   Typography,
   type SelectChangeEvent,
 } from '@mui/material';
@@ -40,7 +41,13 @@ import {
   sortOptions,
 } from '../../marketUtils';
 import type { ItemType, Listing, SortKey, SortOrder } from '../../showApi';
-import { DebounceTextField, ListLoadingState, QuickSellBadge } from './common';
+import {
+  DebounceTextField,
+  ListLoadingState,
+  QuickSellBadge,
+  StarButton,
+  useStarredListings,
+} from './common';
 import { useQueryParams } from './common/useQueryParams';
 import type { FilterUrlParams } from '../../types';
 
@@ -198,6 +205,20 @@ function SortDirectionIcon({ direction }: { direction: SortOrder }) {
   );
 }
 
+function StarFilterIcon({ filled }: { filled: boolean }) {
+  return (
+    <SvgIcon fontSize="small" viewBox="0 0 24 24">
+      <path
+        d="m12 2.9 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.1l-5.56 2.92 1.06-6.2L3 9.43l6.22-.9L12 2.9z"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth={filled ? 0 : 1.8}
+      />
+    </SvgIcon>
+  );
+}
+
 export const SearchPanel = function SearchPanel({
   listings,
   listingError,
@@ -205,6 +226,7 @@ export const SearchPanel = function SearchPanel({
   seriesOptions,
 }: SearchPanelProps) {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
+  const { starredUuids, toggleStarred } = useStarredListings();
   const listRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(MIN_LIST_HEIGHT);
@@ -215,6 +237,7 @@ export const SearchPanel = function SearchPanel({
   const showRefreshingOverlay =
     listingState === 'loading' && listings.length > 0;
   const activeSort = normalizeSort(params?.sort);
+  const starredOnly = params?.starredOnly === '1';
   const profitHrActiveFlipSlots =
     parsePositiveQueryInteger(params?.profitHrActiveFlipSlots) ??
     PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS;
@@ -262,6 +285,7 @@ export const SearchPanel = function SearchPanel({
     params?.profitHrActiveFlipSlots,
     params?.profitHrStubBudget,
     params?.series,
+    params?.starredOnly,
   ].filter(Boolean).length;
   const selectedSeriesValue =
     getMatchingSeriesOption(seriesOptions, params?.series) ??
@@ -285,6 +309,7 @@ export const SearchPanel = function SearchPanel({
       query: undefined,
       rarity: undefined,
       series: undefined,
+      starredOnly: undefined,
     });
   };
 
@@ -335,6 +360,7 @@ export const SearchPanel = function SearchPanel({
     params?.series,
     params?.sort,
     params?.sortDirection,
+    params?.starredOnly,
   ]);
 
   const priceFiltersContent = (
@@ -579,6 +605,36 @@ export const SearchPanel = function SearchPanel({
           </Box>
         ) : null}
 
+        <ToggleButton
+          aria-label={
+            starredOnly
+              ? 'Showing starred items only'
+              : 'Show starred items only'
+          }
+          onChange={() =>
+            setQueryParams({
+              starredOnly: starredOnly ? undefined : '1',
+            })
+          }
+          selected={starredOnly}
+          size="small"
+          sx={{
+            alignSelf: 'flex-start',
+            borderRadius: 1.5,
+            gap: 0.75,
+            minHeight: 36,
+            px: 1.25,
+            textTransform: 'none',
+          }}
+          value="starredOnly"
+        >
+          <StarFilterIcon filled={starredOnly} />
+          Starred only
+          <Typography component="span" color="text.secondary" variant="caption">
+            {starredUuids.size}
+          </Typography>
+        </ToggleButton>
+
         <Stack
           direction="row"
           spacing={1.5}
@@ -678,6 +734,9 @@ export const SearchPanel = function SearchPanel({
                   const index = startIndex + visibleIndex;
                   const uuid = listing.item?.uuid;
                   const active = uuid === params?.uuid;
+                  const itemName =
+                    listing.listing_name ?? listing.item?.name ?? undefined;
+                  const isStarred = uuid ? starredUuids.has(uuid) : false;
                   const image =
                     listing.item?.baked_img ?? listing.item?.img ?? undefined;
                   const metric = getListingSortMetric(
@@ -724,6 +783,14 @@ export const SearchPanel = function SearchPanel({
                           width: '100%',
                         }}
                       >
+                        <StarButton
+                          disabled={!uuid}
+                          isStarred={isStarred}
+                          itemName={itemName}
+                          onToggle={() => {
+                            if (uuid) toggleStarred(uuid);
+                          }}
+                        />
                         <ListItemAvatar sx={{ flex: '0 0 40px', minWidth: 40 }}>
                           <Avatar
                             src={image}
@@ -737,7 +804,7 @@ export const SearchPanel = function SearchPanel({
                           </Avatar>
                         </ListItemAvatar>
                         <ListItemText
-                          primary={listing.listing_name ?? listing.item?.name}
+                          primary={itemName}
                           primaryTypographyProps={{
                             fontWeight: 800,
                             noWrap: true,

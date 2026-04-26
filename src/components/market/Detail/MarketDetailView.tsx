@@ -17,7 +17,13 @@ import {
   PricePoint,
 } from '../../../marketUtils';
 import { Listing } from '../../../showApi';
-import { ChartCard, MetricCard, ProfitMetric, QuickSellBadge } from '../common';
+import {
+  ChartCard,
+  MetricCard,
+  ProfitMetric,
+  QuickSellBadge,
+  StarButton,
+} from '../common';
 import { OrderChart, PriceChart } from '../Charts';
 import { AllCompletedOrdersTableSection } from './AllCompletedOrdersTableSection';
 import { AllCompletedOrdersChartSection } from './AllCompletedOrdersSection';
@@ -50,11 +56,13 @@ interface MarketDetailViewProps {
   recentOrdersError: string;
   recentOrdersState: LoadState;
   safeCompletedOrderPage: number;
+  selectedIsStarred: boolean;
   selectedListing: Listing | null;
   selectedName: string;
   setCompletedOrderPage: (value: number) => void;
   setCompletedOrderRowsPerPage: (value: number) => void;
   usesQuickSellFallback: boolean;
+  onToggleSelectedStarred: () => void;
   onRefresh: () => void;
   refreshDisabled: boolean;
 }
@@ -87,11 +95,13 @@ export function MarketDetailView({
   recentOrdersError,
   recentOrdersState,
   safeCompletedOrderPage,
+  selectedIsStarred,
   selectedListing,
   selectedName,
   setCompletedOrderPage,
   setCompletedOrderRowsPerPage,
   usesQuickSellFallback,
+  onToggleSelectedStarred,
   onRefresh,
   refreshDisabled,
 }: MarketDetailViewProps) {
@@ -175,6 +185,13 @@ export function MarketDetailView({
           </Box>
 
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <StarButton
+              disabled={!selectedListing?.item?.uuid}
+              isStarred={selectedIsStarred}
+              itemName={selectedName}
+              onToggle={onToggleSelectedStarred}
+              size="medium"
+            />
             <Chip
               color={detailState === 'loading' ? 'default' : 'primary'}
               label={detailState === 'loading' ? 'Refreshing...' : 'Live API'}

@@ -58,6 +58,7 @@ URL state and query params
   - `uuid`: selected listing/item.
   - `sort`: active sort key.
   - `sortDirection`: `asc` or `desc`.
+  - `starredOnly`: `1` means show only locally starred listings.
   - `minSpreadForPercent`: minimum spread used only for spread percentage sorting.
   - `profitHrActiveFlipSlots`: optional user override for the Profit/hr active flip slot assumption.
   - `profitHrStubBudget`: optional user override for the Profit/hr working bankroll assumption.
@@ -74,6 +75,7 @@ List data flow
   - `rarity` is passed to the listing API calls.
 - Search text currently participates in the fetch key, then matching is applied locally after fetched listing pages are loaded.
 - Post-query filters (`series`, min/max buy/sell, and spread minimum) should reuse the current fetched listing array for normal filtering work.
+- `starredOnly` is a local post-query filter using the user's locally starred UUID list; changing it or starring/unstarring an item should not refetch listings.
 - Series is still applied locally, but player-card series views need one extra data source: when a player/all-type series filter is selected, or when the search text clearly names a series, `fetchListingsByTypeAndRarity` supplements market listings with matching `items.json` catalog cards. This is required because `/listings.json` only contains market/sellable listings, while complete series checklists can include non-sellable cards.
 - `App.tsx` stores the fetched/enriched list in `allListings`, applies post-query filters and sorting, then sets `filteredListings` for `SearchPanel`.
 
@@ -177,6 +179,7 @@ SearchPanel UX
 - Sort dropdown plus explicit asc/desc icon button are visible primary controls.
 - The minimum spread field is only visible when sort is `Spread %`.
 - Profit/hr tuning fields (`Stub budget`, `Flip slots`) are only visible when sort is `Profit/hr`, positioned above the `Filters` button, and should update the list sort plus row metric without refetching listings.
+- Star controls are local user preferences stored on the user's device, not market data caches. List rows and the selected detail header have star icon buttons. The visible `Starred only` toggle sits above the `Filters` button and filters the current fetched list by starred UUIDs.
 - Post-query filters live behind a `Filters` button in a right-side drawer:
   - series
   - min/max buy now
@@ -190,6 +193,7 @@ SearchPanel UX
 
 Market detail workflow
 - `MarketDetail` reads the selected `uuid` from URL params.
+- The detail header includes a star icon button for the selected listing, using the same local starred UUID store as the list.
 - A local Refresh button increments component state so the selected detail page and order history reload without retriggering the whole list fetch in `App.tsx`.
 - Detail loading sequence:
   - fetch live listing detail via `fetchListingByUuid`
@@ -277,6 +281,7 @@ Data and API notes
 - The frontend API client builds paths from `VITE_BACKEND_API_BASE`, `VITE_SHOW_API_BASE`, and `VITE_HISTORY_API_BASE` when present; otherwise it uses same-origin `/api/show` and `/api`.
 - `VITE_HISTORY_API_ENABLED=false` disables local history fetches and returns empty history/average data.
 - Frontend API helpers should not cache market data in memory or local storage unless a future product decision explicitly reintroduces caching with freshness controls.
+- Local storage is acceptable for user preferences such as starred listing UUIDs. Do not store market price/listing/order payloads there under the current no-frontend-market-cache rule.
 
 Deployment and server lifecycle
 - The intended always-on Linux setup is a systemd service installed by `scripts/install-systemd-service.sh`.

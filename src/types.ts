@@ -14,5 +14,6 @@ export interface FilterUrlParams {
   series?: string;
   sort?: SortKey;
   sortDirection?: SortOrder;
+  starredOnly?: string;
   uuid?: string;
 }
