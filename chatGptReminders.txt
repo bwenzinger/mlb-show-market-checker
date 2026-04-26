@@ -67,6 +67,7 @@ URL state and query params
 List data flow
 - On first load, even with an empty URL, `App.tsx` must fetch listing data. Do not regress this; the previous failure mode was an empty initial list because "previous fetch" and current params were all undefined.
 - `App.tsx` decides whether to fetch new list data by comparing `itemType`, `query`, `rarity`, and `series` against the previous fetch key.
+- Do not add frontend market-data caching for now. Frontend requests should fetch fresh data when the app workflow asks for data, because flipping-card numbers move rapidly and a 5-minute frontend cache can make the displayed opportunity data pointless. This may change in the future, but frontend caching has already been intentionally removed once.
 - `itemType` and `rarity` reduce API work:
   - If `itemType` is selected, only that type is fetched.
   - If `itemType` is empty, all market item types are fetched.
@@ -273,7 +274,7 @@ Data and API notes
 - Equipment, Sponsorships, Stadiums, and Unlockables commonly have `series: Default`; this matters when thinking about series filters.
 - The frontend API client builds paths from `VITE_BACKEND_API_BASE`, `VITE_SHOW_API_BASE`, and `VITE_HISTORY_API_BASE` when present; otherwise it uses same-origin `/api/show` and `/api`.
 - `VITE_HISTORY_API_ENABLED=false` disables local history fetches and returns empty history/average data.
-- `fetchStoredOrderAverages` caches the averages map in memory for 60 seconds on the frontend.
+- Frontend API helpers should not cache market data in memory or local storage unless a future product decision explicitly reintroduces caching with freshness controls.
 
 Deployment and server lifecycle
 - The intended always-on Linux setup is a systemd service installed by `scripts/install-systemd-service.sh`.

@@ -115,15 +115,6 @@ const HISTORY_API_BASE =
     ? `${trimTrailingSlash(BACKEND_API_BASE)}/api`
     : "/api");
 const HISTORY_API_ENABLED = import.meta.env.VITE_HISTORY_API_ENABLED !== "false";
-const STORED_ORDER_AVERAGES_CACHE_MS = 60_000;
-let storedOrderAveragesCache: {
-  expiresAt: number;
-  promise: Promise<Map<string, StoredOrderAverage>>;
-} | null = null;
-let storedOrderLiquidityCache: {
-  expiresAt: number;
-  promise: Promise<Map<string, StoredOrderLiquidity>>;
-} | null = null;
 
 export async function fetchListings({
   page = 1,
@@ -200,106 +191,64 @@ export async function fetchStoredCompletedOrders({
   return json.orders ?? [];
 }
 
-export async function fetchStoredOrderAverages({
-  forceRefresh = false,
-}: {
-  forceRefresh?: boolean;
-} = {}): Promise<Map<string, StoredOrderAverage>> {
+export async function fetchStoredOrderAverages(): Promise<
+  Map<string, StoredOrderAverage>
+> {
   if (!HISTORY_API_ENABLED) {
     return new Map();
   }
 
-  const now = Date.now();
-  if (
-    !forceRefresh &&
-    storedOrderAveragesCache &&
-    storedOrderAveragesCache.expiresAt > now
-  ) {
-    return storedOrderAveragesCache.promise;
+  const url = new URL(
+    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/averages`,
+    window.location.href
+  );
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Local history API returned HTTP ${response.status}`);
   }
 
-  const promise = (async () => {
-    const url = new URL(
-      `${trimTrailingSlash(HISTORY_API_BASE)}/cards/averages`,
-      window.location.href
-    );
-
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Local history API returned HTTP ${response.status}`);
-    }
-
-    const json = (await response.json()) as {
-      averages?: StoredOrderAverage[];
-    };
-
-    return new Map(
-      (json.averages ?? []).map((average) => [average.uuid, average])
-    );
-  })();
-
-  storedOrderAveragesCache = {
-    expiresAt: now + STORED_ORDER_AVERAGES_CACHE_MS,
-    promise,
+  const json = (await response.json()) as {
+    averages?: StoredOrderAverage[];
   };
 
-  return promise;
+  return new Map(
+    (json.averages ?? []).map((average) => [average.uuid, average])
+  );
 }
 
-export async function fetchStoredOrderLiquidities({
-  forceRefresh = false,
-}: {
-  forceRefresh?: boolean;
-} = {}): Promise<Map<string, StoredOrderLiquidity>> {
+export async function fetchStoredOrderLiquidities(): Promise<
+  Map<string, StoredOrderLiquidity>
+> {
   if (!HISTORY_API_ENABLED) {
     return new Map();
   }
 
-  const now = Date.now();
-  if (
-    !forceRefresh &&
-    storedOrderLiquidityCache &&
-    storedOrderLiquidityCache.expiresAt > now
-  ) {
-    return storedOrderLiquidityCache.promise;
+  const url = new URL(
+    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/liquidity`,
+    window.location.href
+  );
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Local history API returned HTTP ${response.status}`);
   }
 
-  const promise = (async () => {
-    const url = new URL(
-      `${trimTrailingSlash(HISTORY_API_BASE)}/cards/liquidity`,
-      window.location.href
-    );
-
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Local history API returned HTTP ${response.status}`);
-    }
-
-    const json = (await response.json()) as {
-      liquidity?: StoredOrderLiquidity[];
-    };
-
-    return new Map(
-      (json.liquidity ?? []).map((entry) => [entry.uuid, entry])
-    );
-  })();
-
-  storedOrderLiquidityCache = {
-    expiresAt: now + STORED_ORDER_AVERAGES_CACHE_MS,
-    promise,
+  const json = (await response.json()) as {
+    liquidity?: StoredOrderLiquidity[];
   };
 
-  return promise;
+  return new Map((json.liquidity ?? []).map((entry) => [entry.uuid, entry]));
 }
 
 export async function fetchStoredOrderAverage({

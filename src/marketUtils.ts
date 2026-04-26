@@ -76,8 +76,6 @@ export const DEFAULT_MIN_SPREAD_FOR_PERCENT = 40;
 export const DEFAULT_SORT: SortKey = 'spread_percentage';
 export const DEFAULT_LIST_SORT: SortKey = 'rank';
 
-const LISTING_CACHE_MS = 5 * 60000;
-const LISTING_CACHE_STORAGE_KEY = 'mlb-show-market-catalog-v2';
 const SALE_TAX_RATE = 0.1;
 const PROFIT_PER_HOUR_HANDLING_HOURS = 0.05;
 export const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
@@ -147,16 +145,6 @@ export interface ResolvedProfitPerHourOptions {
 
 type PlayerCardQuickSellRarity =
   keyof typeof GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY;
-
-const fullListingsCache = new Map<
-  string,
-  { expiresAt: number; promise: Promise<Listing[]> }
->();
-let listingsRefreshPromise: Promise<Listing[]> | null = null;
-const itemCatalogCache = new Map<
-  ItemType,
-  { expiresAt: number; promise: Promise<ShowItem[]> }
->();
 
 export function normalizePriceHistory(
   points: ListingPriceHistoryPoint[]
@@ -928,25 +916,6 @@ async function fetchAllListingsForType(
 }
 
 async function fetchAllItemsForType(type: ItemType): Promise<ShowItem[]> {
-  const now = Date.now();
-  const cached = itemCatalogCache.get(type);
-
-  if (cached && cached.expiresAt > now) {
-    return cached.promise;
-  }
-
-  const promise = fetchAllItemsForTypeUncached(type);
-  itemCatalogCache.set(type, {
-    expiresAt: now + LISTING_CACHE_MS,
-    promise,
-  });
-
-  return promise;
-}
-
-async function fetchAllItemsForTypeUncached(
-  type: ItemType
-): Promise<ShowItem[]> {
   const firstResponse = await fetchItems({
     page: 1,
     type,
