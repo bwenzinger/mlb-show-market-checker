@@ -80,8 +80,8 @@ const LISTING_CACHE_MS = 5 * 60000;
 const LISTING_CACHE_STORAGE_KEY = 'mlb-show-market-catalog-v2';
 const SALE_TAX_RATE = 0.1;
 const PROFIT_PER_HOUR_HANDLING_HOURS = 0.05;
-const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
-const PROFIT_PER_HOUR_STUB_BUDGET = 75000;
+export const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
+export const PROFIT_PER_HOUR_STUB_BUDGET = 75000;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
   { maxOvr: 64, live: 5, nonLive: 2 },
   { maxOvr: 74, live: 25, nonLive: 12 },
@@ -134,6 +134,16 @@ const ITEM_QUICK_SELL_BY_TYPE_AND_RARITY: Partial<
     diamond: 1000,
   },
 };
+
+export interface ProfitPerHourOptions {
+  activeFlipSlots?: number;
+  stubBudget?: number;
+}
+
+export interface ResolvedProfitPerHourOptions {
+  activeFlipSlots: number;
+  stubBudget: number;
+}
 
 type PlayerCardQuickSellRarity =
   keyof typeof GENERIC_PLAYER_CARD_QUICK_SELL_BY_RARITY;
@@ -410,9 +420,33 @@ export function normalizeSort(value: string | undefined): SortKey {
     : DEFAULT_LIST_SORT;
 }
 
+function positiveIntegerOrDefault(value: number | undefined, fallback: number) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(Math.trunc(value), 1);
+}
+
+export function resolveProfitPerHourOptions(
+  options: ProfitPerHourOptions = {}
+): ResolvedProfitPerHourOptions {
+  return {
+    activeFlipSlots: positiveIntegerOrDefault(
+      options.activeFlipSlots,
+      PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS
+    ),
+    stubBudget: positiveIntegerOrDefault(
+      options.stubBudget,
+      PROFIT_PER_HOUR_STUB_BUDGET
+    ),
+  };
+}
+
 export function getListingSortMetric(
   listing: Listing,
-  sort?: SortKey
+  sort?: SortKey,
+  profitPerHourOptions?: ProfitPerHourOptions
 ): { label: string; value: string } {
   const prices = getListingPrices(listing);
 
@@ -435,7 +469,9 @@ export function getListingSortMetric(
   if (sort === 'profit_per_hour') {
     return {
       label: 'Profit/hr',
-      value: formatPerHour(getListingProfitPerHour(listing)),
+      value: formatPerHour(
+        getListingProfitPerHour(listing, profitPerHourOptions)
+      ),
     };
   }
 
@@ -494,7 +530,10 @@ function getListingMarketPrices(listing: Listing): {
   };
 }
 
-export function getListingProfitPerHour(listing: Listing): number | null {
+export function getListingProfitPerHour(
+  listing: Listing,
+  options?: ProfitPerHourOptions
+): number | null {
   const prices = getListingMarketPrices(listing);
   const profit = calculateProfit(prices);
   const acquisitionCost = prices.sellNow;
@@ -502,6 +541,7 @@ export function getListingProfitPerHour(listing: Listing): number | null {
   const buyFillRatePerHour = liquidity?.buyFillRatePerHour ?? null;
   const sellFillRatePerHour = liquidity?.sellFillRatePerHour ?? null;
   const confidence = liquidity?.confidence ?? null;
+  const { activeFlipSlots, stubBudget } = resolveProfitPerHourOptions(options);
 
   if (
     profit === null ||
@@ -532,8 +572,8 @@ export function getListingProfitPerHour(listing: Listing): number | null {
     sellFillRatePerHour
   );
   const budgetLimitedActiveFlipSlots = Math.min(
-    PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS,
-    Math.floor(PROFIT_PER_HOUR_STUB_BUDGET / acquisitionCost)
+    activeFlipSlots,
+    Math.floor(stubBudget / acquisitionCost)
   );
 
   if (budgetLimitedActiveFlipSlots <= 0) {
@@ -769,14 +809,15 @@ export function sortListingsByStandardMetric(
     SortKey,
     'spread_number' | 'spread_percentage' | 'profit' | 'profit_percentage'
   >,
-  sortDirection?: SortOrder
+  sortDirection?: SortOrder,
+  profitPerHourOptions?: ProfitPerHourOptions
 ): Listing[] {
   const direction =
     resolveSortDirection(sort, sortDirection) === 'asc' ? 1 : -1;
 
   return listings.slice().sort((a, b) => {
-    const aValue = listingStandardSortValue(a, sort);
-    const bValue = listingStandardSortValue(b, sort);
+    const aValue = listingStandardSortValue(a, sort, profitPerHourOptions);
+    const bValue = listingStandardSortValue(b, sort, profitPerHourOptions);
 
     if (aValue === null && bValue === null) return compareListingNames(a, b);
     if (aValue === null) return 1;
@@ -800,14 +841,15 @@ function listingStandardSortValue(
   sort?: Exclude<
     SortKey,
     'spread_number' | 'spread_percentage' | 'profit' | 'profit_percentage'
-  >
+  >,
+  profitPerHourOptions?: ProfitPerHourOptions
 ): number | null {
   if (sort === 'buy_now_vs_all_time_average_diff') {
     return listing.buyNowVsAllTimeAverageDiff ?? null;
   }
 
   if (sort === 'profit_per_hour') {
-    return getListingProfitPerHour(listing);
+    return getListingProfitPerHour(listing, profitPerHourOptions);
   }
 
   if (sort === 'best_sell_price') {

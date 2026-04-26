@@ -7,6 +7,8 @@ export interface FilterUrlParams {
   minBuyNow?: string;
   minSpreadForPercent?: string;
   minSellNow?: string;
+  profitHrActiveFlipSlots?: string;
+  profitHrStubBudget?: string;
   query?: string;
   rarity?: string;
   series?: string;

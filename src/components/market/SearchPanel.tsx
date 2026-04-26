@@ -31,6 +31,8 @@ import {
   isUsingQuickSellFallback,
   itemTypeOptions,
   normalizeSort,
+  PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS,
+  PROFIT_PER_HOUR_STUB_BUDGET,
   rarityOptions,
   resolveSortDirection,
   titleCase,
@@ -56,6 +58,31 @@ function toNonNegativeQueryValue(value: string): string | undefined {
   if (!Number.isFinite(parsed)) return undefined;
 
   return String(Math.max(Math.trunc(parsed), 0));
+}
+
+function parsePositiveQueryInteger(
+  value: string | undefined
+): number | undefined {
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+
+  return Math.trunc(parsed);
+}
+
+function toPositiveQueryValue(
+  value: string,
+  defaultValue: number
+): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+
+  const normalized = String(Math.max(Math.trunc(parsed), 1));
+  return normalized === String(defaultValue) ? undefined : normalized;
 }
 
 function getMatchingSeriesOption(options: string[], value: string | undefined) {
@@ -188,6 +215,16 @@ export const SearchPanel = function SearchPanel({
   const showRefreshingOverlay =
     listingState === 'loading' && listings.length > 0;
   const activeSort = normalizeSort(params?.sort);
+  const profitHrActiveFlipSlots =
+    parsePositiveQueryInteger(params?.profitHrActiveFlipSlots) ??
+    PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS;
+  const profitHrStubBudget =
+    parsePositiveQueryInteger(params?.profitHrStubBudget) ??
+    PROFIT_PER_HOUR_STUB_BUDGET;
+  const profitPerHourOptions = {
+    activeFlipSlots: profitHrActiveFlipSlots,
+    stubBudget: profitHrStubBudget,
+  };
   const activeSortDirection = resolveSortDirection(
     activeSort,
     params?.sortDirection
@@ -222,6 +259,8 @@ export const SearchPanel = function SearchPanel({
     params?.maxBuyNow,
     params?.minSellNow,
     params?.maxSellNow,
+    params?.profitHrActiveFlipSlots,
+    params?.profitHrStubBudget,
     params?.series,
   ].filter(Boolean).length;
   const selectedSeriesValue =
@@ -241,6 +280,8 @@ export const SearchPanel = function SearchPanel({
       minBuyNow: undefined,
       minSellNow: undefined,
       minSpreadForPercent: undefined,
+      profitHrActiveFlipSlots: undefined,
+      profitHrStubBudget: undefined,
       query: undefined,
       rarity: undefined,
       series: undefined,
@@ -287,6 +328,8 @@ export const SearchPanel = function SearchPanel({
     params?.minBuyNow,
     params?.minSellNow,
     params?.minSpreadForPercent,
+    params?.profitHrActiveFlipSlots,
+    params?.profitHrStubBudget,
     params?.query,
     params?.rarity,
     params?.series,
@@ -492,6 +535,50 @@ export const SearchPanel = function SearchPanel({
           />
         ) : null}
 
+        {activeSort === 'profit_per_hour' ? (
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 1.5,
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
+              },
+            }}
+          >
+            <TextField
+              fullWidth
+              inputProps={{ min: 1, step: 1000 }}
+              label="Stub budget"
+              onChange={(event) =>
+                setQueryParams({
+                  profitHrStubBudget: toPositiveQueryValue(
+                    event.target.value,
+                    PROFIT_PER_HOUR_STUB_BUDGET
+                  ),
+                })
+              }
+              type="number"
+              value={String(profitHrStubBudget)}
+            />
+            <TextField
+              fullWidth
+              inputProps={{ min: 1, step: 1 }}
+              label="Flip slots"
+              onChange={(event) =>
+                setQueryParams({
+                  profitHrActiveFlipSlots: toPositiveQueryValue(
+                    event.target.value,
+                    PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS
+                  ),
+                })
+              }
+              type="number"
+              value={String(profitHrActiveFlipSlots)}
+            />
+          </Box>
+        ) : null}
+
         <Stack
           direction="row"
           spacing={1.5}
@@ -593,7 +680,11 @@ export const SearchPanel = function SearchPanel({
                   const active = uuid === params?.uuid;
                   const image =
                     listing.item?.baked_img ?? listing.item?.img ?? undefined;
-                  const metric = getListingSortMetric(listing, activeSort);
+                  const metric = getListingSortMetric(
+                    listing,
+                    activeSort,
+                    profitPerHourOptions
+                  );
                   const showQuickSellBadge =
                     isUsingQuickSellFallback(listing) &&
                     doesSortMetricUseQuickSell(activeSort);

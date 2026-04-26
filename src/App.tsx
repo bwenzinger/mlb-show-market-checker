@@ -13,6 +13,7 @@ import {
   sortListingsByStandardMetric,
   getListingPrices,
   normalizeSort,
+  type ProfitPerHourOptions,
 } from './marketUtils';
 import {
   fetchStoredOrderAverages,
@@ -31,6 +32,17 @@ function parseNonNegativeQueryNumber(
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(parsed, 0) : undefined;
+}
+
+function parsePositiveQueryInteger(
+  value: string | undefined
+): number | undefined {
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+
+  return Math.trunc(parsed);
 }
 
 function isWithinRange(
@@ -92,6 +104,15 @@ export default function App() {
   const activeSort = normalizeSort(params?.sort);
   const sortDirection: SortOrder =
     params?.sortDirection ?? getDefaultSortDirection(activeSort);
+  const profitPerHourOptions: ProfitPerHourOptions = useMemo(
+    () => ({
+      activeFlipSlots: parsePositiveQueryInteger(
+        params?.profitHrActiveFlipSlots
+      ),
+      stubBudget: parsePositiveQueryInteger(params?.profitHrStubBudget),
+    }),
+    [params?.profitHrActiveFlipSlots, params?.profitHrStubBudget]
+  );
   // const initialFilters = useMemo(readFiltersFromUrl, []);
   // const [query, setQuery] = useState(initialFilters.searchText);
   // const [itemType, setItemType] = useState(initialFilters.itemType);
@@ -247,7 +268,8 @@ export default function App() {
           nextListings = sortListingsByStandardMetric(
             nextListings,
             activeSort,
-            sortDirection
+            sortDirection,
+            profitPerHourOptions
           );
         }
 
@@ -287,6 +309,8 @@ export default function App() {
     params?.minSpreadForPercent,
     params?.minSellNow,
     params?.query,
+    params?.profitHrActiveFlipSlots,
+    params?.profitHrStubBudget,
     params?.rarity,
     params?.series,
     params?.sort,

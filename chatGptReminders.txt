@@ -59,6 +59,8 @@ URL state and query params
   - `sort`: active sort key.
   - `sortDirection`: `asc` or `desc`.
   - `minSpreadForPercent`: minimum spread used only for spread percentage sorting.
+  - `profitHrActiveFlipSlots`: optional user override for the Profit/hr active flip slot assumption.
+  - `profitHrStubBudget`: optional user override for the Profit/hr working bankroll assumption.
   - `series`: post-query series filter.
   - `minBuyNow`, `maxBuyNow`, `minSellNow`, `maxSellNow`: post-query price filters.
 
@@ -155,8 +157,9 @@ Price, spread, profit, and quick-sell logic
   - compute current profit from live market buy/sell prices
   - compute expected cycle time as `(1 / buyFillRatePerHour) + (1 / sellFillRatePerHour) + handlingHours`
   - estimate pipeline throughput as the smaller of observed market throughput (`min(buyFillRatePerHour, sellFillRatePerHour)`) and the human slot cap (`activeFlipSlots / expectedCycleTime`)
-  - use `activeFlipSlots = 7` as the human-realistic number of simultaneous flips
-  - assume a human-realistic working bankroll of `75,000` stubs, and reduce active slots to `floor(75000 / sellNow)` when the acquisition cost makes 7 copies unrealistic
+  - use `activeFlipSlots = 7` as the default human-realistic number of simultaneous flips
+  - assume a default human-realistic working bankroll of `75,000` stubs, and reduce active slots to `floor(stubBudget / sellNow)` when the acquisition cost makes the requested number of copies unrealistic
+  - when `Profit/hr` is selected, show visible controls for stub budget and flip slots below the primary sort/filter controls and above the `Filters` button; default the inputs to `75,000` and `7`, and store non-default values in URL params
   - multiply `profit * realisticFlipsPerHour` by cached confidence
 - Liquidity window selection:
   - prefer 24h if both buy and sell match counts are at least 3
@@ -172,6 +175,7 @@ SearchPanel UX
 - Type and rarity are visible primary controls.
 - Sort dropdown plus explicit asc/desc icon button are visible primary controls.
 - The minimum spread field is only visible when sort is `Spread %`.
+- Profit/hr tuning fields (`Stub budget`, `Flip slots`) are only visible when sort is `Profit/hr`, positioned above the `Filters` button, and should update the list sort plus row metric without refetching listings.
 - Post-query filters live behind a `Filters` button in a right-side drawer:
   - series
   - min/max buy now
