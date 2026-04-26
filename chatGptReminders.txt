@@ -24,6 +24,10 @@ Stack and commands
   - `npm run build`: TypeScript check plus Vite production build.
 - Build warning: Vite currently warns that the main JS bundle is larger than 500 kB after minification. This is known.
 
+Critical data safety rule
+- `market.sqlite` is live local market-history data and must absolutely never be deleted, reset, overwritten, migrated destructively, or directly modified by AI agents in any way.
+- AI agents may read code that references `market.sqlite`, but must not run commands or make code changes whose purpose is to alter, clear, compact, recreate, or remove that database file.
+
 Top-level architecture
 - `src/App.tsx` coordinates the list workflow: read URL params, fetch listing data when needed, apply local transforms, choose the selected UUID, and render `SearchPanel` plus `MarketDetail`.
 - `src/components/market/SearchPanel.tsx` owns the sidebar UI: search/type/rarity/sort controls, post-query filter drawer, clear-all control, and the virtualized listing list.
