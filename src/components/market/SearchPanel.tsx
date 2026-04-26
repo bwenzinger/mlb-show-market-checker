@@ -605,36 +605,6 @@ export const SearchPanel = function SearchPanel({
           </Box>
         ) : null}
 
-        <ToggleButton
-          aria-label={
-            starredOnly
-              ? 'Showing starred items only'
-              : 'Show starred items only'
-          }
-          onChange={() =>
-            setQueryParams({
-              starredOnly: starredOnly ? undefined : '1',
-            })
-          }
-          selected={starredOnly}
-          size="small"
-          sx={{
-            alignSelf: 'flex-start',
-            borderRadius: 1.5,
-            gap: 0.75,
-            minHeight: 36,
-            px: 1.25,
-            textTransform: 'none',
-          }}
-          value="starredOnly"
-        >
-          <StarFilterIcon filled={starredOnly} />
-          Starred only
-          <Typography component="span" color="text.secondary" variant="caption">
-            {starredUuids.size}
-          </Typography>
-        </ToggleButton>
-
         <Stack
           direction="row"
           spacing={1.5}
@@ -644,25 +614,64 @@ export const SearchPanel = function SearchPanel({
             justifyContent: 'space-between',
           }}
         >
-          <Badge
-            badgeContent={activeFilterCount}
-            color="primary"
-            invisible={activeFilterCount === 0}
-            max={99}
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', flexWrap: 'wrap' }}
           >
-            <Button
-              aria-label={
-                activeFilterCount > 0
-                  ? `Open filters, ${activeFilterCount} active`
-                  : 'Open filters'
-              }
-              onClick={() => setIsFiltersDrawerOpen(true)}
-              sx={{ textTransform: 'none' }}
-              variant="outlined"
+            <Badge
+              badgeContent={activeFilterCount}
+              color="primary"
+              invisible={activeFilterCount === 0}
+              max={99}
             >
-              Filters
-            </Button>
-          </Badge>
+              <Button
+                aria-label={
+                  activeFilterCount > 0
+                    ? `Open filters, ${activeFilterCount} active`
+                    : 'Open filters'
+                }
+                onClick={() => setIsFiltersDrawerOpen(true)}
+                sx={{ textTransform: 'none' }}
+                variant="outlined"
+              >
+                Filters
+              </Button>
+            </Badge>
+
+            <ToggleButton
+              aria-label={
+                starredOnly
+                  ? 'Showing starred items only'
+                  : 'Show starred items only'
+              }
+              onChange={() =>
+                setQueryParams({
+                  starredOnly: starredOnly ? undefined : '1',
+                })
+              }
+              selected={starredOnly}
+              size="small"
+              sx={{
+                borderRadius: 1.5,
+                gap: 0.75,
+                minHeight: 36,
+                px: 1.25,
+                textTransform: 'none',
+              }}
+              value="starredOnly"
+            >
+              <StarFilterIcon filled={starredOnly} />
+              Starred only
+              <Typography
+                component="span"
+                color="text.secondary"
+                variant="caption"
+              >
+                {starredUuids.size}
+              </Typography>
+            </ToggleButton>
+          </Stack>
 
           <Button
             onClick={clearAllFilters}

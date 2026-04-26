@@ -179,7 +179,7 @@ SearchPanel UX
 - Sort dropdown plus explicit asc/desc icon button are visible primary controls.
 - The minimum spread field is only visible when sort is `Spread %`.
 - Profit/hr tuning fields (`Stub budget`, `Flip slots`) are only visible when sort is `Profit/hr`, positioned above the `Filters` button, and should update the list sort plus row metric without refetching listings.
-- Star controls are local user preferences stored on the user's device, not market data caches. List rows and the selected detail header have star icon buttons. The visible `Starred only` toggle sits above the `Filters` button and filters the current fetched list by starred UUIDs.
+- Star controls are local user preferences stored on the user's device, not market data caches. List rows and the selected detail header have star icon buttons. The visible `Starred only` toggle sits next to the `Filters` button and filters the current fetched list by starred UUIDs.
 - Post-query filters live behind a `Filters` button in a right-side drawer:
   - series
   - min/max buy now
