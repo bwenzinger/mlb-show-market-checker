@@ -150,7 +150,9 @@ Price, spread, profit, and quick-sell logic
 - The current formula is an adjusted expected flip rate:
   - compute current profit from live market buy/sell prices
   - compute expected cycle time as `(1 / buyFillRatePerHour) + (1 / sellFillRatePerHour) + handlingHours`
-  - multiply the resulting raw profit/hour by cached confidence
+  - estimate pipeline throughput as the smaller of observed market throughput (`min(buyFillRatePerHour, sellFillRatePerHour)`) and the human slot cap (`activeFlipSlots / expectedCycleTime`)
+  - use `activeFlipSlots = 7` as the human-realistic number of simultaneous flips
+  - multiply `profit * realisticFlipsPerHour` by cached confidence
 - Liquidity window selection:
   - prefer 24h if both buy and sell match counts are at least 3
   - otherwise fall back to 7d

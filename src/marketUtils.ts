@@ -80,6 +80,7 @@ const LISTING_CACHE_MS = 5 * 60_000;
 const LISTING_CACHE_STORAGE_KEY = 'mlb-show-market-catalog-v2';
 const SALE_TAX_RATE = 0.1;
 const PROFIT_PER_HOUR_HANDLING_HOURS = 0.05;
+const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
   { maxOvr: 64, live: 5, nonLive: 2 },
   { maxOvr: 74, live: 25, nonLive: 12 },
@@ -525,7 +526,18 @@ export function getListingProfitPerHour(listing: Listing): number | null {
     return null;
   }
 
-  return (profit / cycleHours) * confidence;
+  const marketThroughputPerHour = Math.min(
+    buyFillRatePerHour,
+    sellFillRatePerHour
+  );
+  const slotLimitedThroughputPerHour =
+    PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS / cycleHours;
+  const realisticFlipsPerHour = Math.min(
+    marketThroughputPerHour,
+    slotLimitedThroughputPerHour
+  );
+
+  return profit * realisticFlipsPerHour * confidence;
 }
 
 export function isUsingQuickSellFallback(listing: Listing): boolean {
