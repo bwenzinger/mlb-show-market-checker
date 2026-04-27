@@ -492,6 +492,7 @@ export function getListingSortMetric(
     return {
       label: 'Profit %',
       value: formatPercent(listingProfitPercentage(listing)),
+      secondaryValue: formatStubs(listingProfit(listing)),
     };
   }
 
