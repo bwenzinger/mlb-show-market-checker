@@ -435,7 +435,7 @@ export function getListingSortMetric(
   listing: Listing,
   sort?: SortKey,
   profitPerHourOptions?: ProfitPerHourOptions
-): { label: string; value: string } {
+): { label: string; secondaryValue?: string; value: string } {
   const prices = getListingPrices(listing);
 
   if (sort === 'buy_now_vs_all_time_average_diff') {
@@ -455,8 +455,12 @@ export function getListingSortMetric(
   }
 
   if (sort === 'profit_per_hour') {
+    const profitPerFlip = getListingProfitPerFlip(listing);
+
     return {
-      label: 'Profit/hr',
+      label: '',
+      secondaryValue:
+        profitPerFlip === null ? undefined : `${formatStubs(profitPerFlip)}`,
       value: formatPerHour(
         getListingProfitPerHour(listing, profitPerHourOptions)
       ),
@@ -576,6 +580,10 @@ export function getListingProfitPerHour(
   );
 
   return profit * realisticFlipsPerHour * confidence;
+}
+
+export function getListingProfitPerFlip(listing: Listing): number | null {
+  return calculateProfit(getListingMarketPrices(listing));
 }
 
 export function isUsingQuickSellFallback(listing: Listing): boolean {

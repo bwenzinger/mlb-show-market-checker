@@ -862,12 +862,10 @@ export const SearchPanel = function SearchPanel({
                             </Typography>
                             {showQuickSellBadge ? <QuickSellBadge /> : null}
                           </Stack>
-                          <Typography
-                            color="text.secondary"
-                            noWrap
-                            variant="caption"
-                          >
-                            {metric.label}
+                          <Typography color="success" noWrap variant="caption">
+                            {metric.secondaryValue
+                              ? `+${metric.secondaryValue}`
+                              : metric.label}
                           </Typography>
                         </Box>
                       </ListItemButton>
