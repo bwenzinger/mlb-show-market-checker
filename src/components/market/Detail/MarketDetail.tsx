@@ -72,6 +72,8 @@ function parsePositiveQueryInteger(
   return Math.trunc(parsed);
 }
 
+const ALL_ORDERS_LOAD_DELAY_MS = 250;
+
 export function MarketDetail() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
   const { starredUuids, toggleStarred } = useStarredListings();
@@ -124,6 +126,8 @@ export function MarketDetail() {
     }
 
     let active = true;
+    const abortController = new AbortController();
+    const { signal } = abortController;
     let allOrdersTimeoutId: number | null = null;
 
     setSelectedListing(null);
@@ -148,14 +152,15 @@ export function MarketDetail() {
       try {
         const recentOrders = await fetchStoredCompletedOrders({
           days: RECENT_ORDER_LOOKBACK_DAYS,
+          signal,
           uuid: params.uuid,
         });
-        if (!active) return;
+        if (!active || signal.aborted) return;
 
         setStoredCompletedOrders(recentOrders.length > 0 ? recentOrders : null);
         setRecentOrdersState('ready');
       } catch (error) {
-        if (!active) return;
+        if (!active || signal.aborted) return;
 
         setStoredCompletedOrders(null);
         setRecentOrdersState('error');
@@ -176,14 +181,15 @@ export function MarketDetail() {
       try {
         const allOrders = await fetchStoredCompletedOrders({
           days: ALL_ORDER_LOOKBACK_DAYS,
+          signal,
           uuid: params?.uuid,
         });
-        if (!active) return;
+        if (!active || signal.aborted) return;
 
         setStoredAllCompletedOrders(allOrders.length > 0 ? allOrders : null);
         setAllOrdersState('ready');
       } catch (error) {
-        if (!active) return;
+        if (!active || signal.aborted) return;
 
         setStoredAllCompletedOrders(null);
         setAllOrdersState('error');
@@ -200,13 +206,14 @@ export function MarketDetail() {
 
       try {
         const average = await fetchStoredOrderAverage({
+          signal,
           uuid: params.uuid,
         });
-        if (!active) return;
+        if (!active || signal.aborted) return;
 
         setStoredOrderAverage(average);
       } catch {
-        if (!active) return;
+        if (!active || signal.aborted) return;
 
         setStoredOrderAverage(null);
       }
@@ -215,11 +222,16 @@ export function MarketDetail() {
     async function loadDetail() {
       if (!params?.uuid) return;
       try {
-        const listing = await fetchListingByUuid(params?.uuid);
+        const listing = await fetchListingByUuid(params?.uuid, { signal });
         const liquidity = await fetchStoredOrderLiquidity({
+          signal,
           uuid: params.uuid,
-        }).catch(() => null);
-        if (!active) return;
+        }).catch((error) => {
+          if (signal.aborted) throw error;
+
+          return null;
+        });
+        if (!active || signal.aborted) return;
 
         setSelectedListing({
           ...listing,
@@ -229,11 +241,11 @@ export function MarketDetail() {
         void loadAverage();
         void loadRecentOrders();
         allOrdersTimeoutId = window.setTimeout(() => {
-          if (!active) return;
+          if (!active || signal.aborted) return;
           void loadAllOrders();
-        }, 0);
+        }, ALL_ORDERS_LOAD_DELAY_MS);
       } catch (error) {
-        if (!active) return;
+        if (!active || signal.aborted) return;
 
         setDetailState('error');
         setDetailError(error instanceof Error ? error.message : String(error));
@@ -244,6 +256,7 @@ export function MarketDetail() {
 
     return () => {
       active = false;
+      abortController.abort();
       if (allOrdersTimeoutId !== null) {
         window.clearTimeout(allOrdersTimeoutId);
       }

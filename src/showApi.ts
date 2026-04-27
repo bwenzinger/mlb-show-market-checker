@@ -101,6 +101,10 @@ export interface ItemsResponse {
   items: ShowItem[];
 }
 
+interface RequestOptions {
+  signal?: AbortSignal;
+}
+
 const BACKEND_API_BASE = import.meta.env.VITE_BACKEND_API_BASE as
   | string
   | undefined;
@@ -154,15 +158,20 @@ export async function fetchItems({
   });
 }
 
-export async function fetchListingByUuid(uuid: string): Promise<Listing> {
-  return requestJson<Listing>("/listing.json", { uuid });
+export async function fetchListingByUuid(
+  uuid: string,
+  options: RequestOptions = {}
+): Promise<Listing> {
+  return requestJson<Listing>("/listing.json", { uuid }, options);
 }
 
 export async function fetchStoredCompletedOrders({
   days = 7,
+  signal,
   uuid,
 }: {
   days?: number;
+  signal?: AbortSignal;
   uuid: string;
 }): Promise<CompletedOrder[]> {
   if (!HISTORY_API_ENABLED) {
@@ -252,8 +261,10 @@ export async function fetchStoredOrderLiquidities(): Promise<
 }
 
 export async function fetchStoredOrderLiquidity({
+  signal,
   uuid,
 }: {
+  signal?: AbortSignal;
   uuid: string;
 }): Promise<StoredOrderLiquidity | null> {
   if (!HISTORY_API_ENABLED) {
@@ -271,6 +282,7 @@ export async function fetchStoredOrderLiquidity({
     headers: {
       Accept: "application/json",
     },
+    signal,
   });
 
   if (!response.ok) {
@@ -285,8 +297,10 @@ export async function fetchStoredOrderLiquidity({
 }
 
 export async function fetchStoredOrderAverage({
+  signal,
   uuid,
 }: {
+  signal?: AbortSignal;
   uuid: string;
 }): Promise<StoredOrderAverage | null> {
   if (!HISTORY_API_ENABLED) {
@@ -304,6 +318,7 @@ export async function fetchStoredOrderAverage({
     headers: {
       Accept: "application/json",
     },
+    signal,
   });
 
   if (!response.ok) {
@@ -320,6 +335,7 @@ export async function fetchStoredOrderAverage({
 async function requestJson<T>(
   path: string,
   searchParams: Record<string, string | number | undefined> = {},
+  options: RequestOptions = {},
 ): Promise<T> {
   const url = new URL(`${trimTrailingSlash(API_BASE)}${path}`, window.location.href);
 
@@ -333,6 +349,7 @@ async function requestJson<T>(
     headers: {
       Accept: "application/json",
     },
+    signal: options.signal,
   });
 
   if (!response.ok) {

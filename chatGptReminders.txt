@@ -196,12 +196,13 @@ Market detail workflow
 - `MarketDetail` reads the selected `uuid` from URL params.
 - The detail header includes a star icon button for the selected listing, using the same local starred UUID store as the list.
 - A local Refresh button increments component state so the selected detail page and order history reload without retriggering the whole list fetch in `App.tsx`.
+- Selection/detail requests are abortable. When the user selects another item, stale detail, average, liquidity, and completed-order requests should be cancelled or ignored so rapid list tapping, especially on mobile, does not leave old large history payloads parsing/rendering in the background.
 - Detail loading sequence:
   - fetch live listing detail via `fetchListingByUuid`
   - fetch cached all-time average via `/api/cards/:uuid/average`
   - fetch cached liquidity via `/api/cards/:uuid/liquidity` for the detail `Profit/hr` card
   - fetch recent stored completed orders using `RECENT_ORDER_LOOKBACK_DAYS` (7 days)
-  - fetch long-term stored completed orders using `ALL_ORDER_LOOKBACK_DAYS` (3650 days)
+  - after a short delay, fetch long-term stored completed orders using `ALL_ORDER_LOOKBACK_DAYS` (3650 days)
 - Recent/all-order fetches fall back to the live API sample if local history is unavailable or empty.
 - Summary cards currently show:
   - Buy now
