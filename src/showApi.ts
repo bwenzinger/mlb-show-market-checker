@@ -84,7 +84,12 @@ export interface StoredOrderLiquidity {
   confidence: number;
   computedAt: string;
   lastBuyMatchAt?: string | null;
+  lastOrderAt?: string | null;
   lastSellMatchAt?: string | null;
+  recentOrderCount3m?: number;
+  recentOrderCount10m?: number;
+  recentOrderCount30m?: number;
+  recentOrderCount60m?: number;
   recentOrderCount: number;
   sellFillRatePerHour: number | null;
   sellMatchCount: number;

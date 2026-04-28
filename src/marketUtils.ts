@@ -82,9 +82,11 @@ const PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES = 3;
 const PROFIT_PER_HOUR_WARM_WINDOW_MINUTES = 10;
 const PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES = 30;
 const PROFIT_PER_HOUR_STALE_WINDOW_MINUTES = 60;
-const PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE = 0.2;
-const PROFIT_PER_HOUR_RECENT_WINDOW_MIN_CONFIDENCE = 0.03;
-const PROFIT_PER_HOUR_STALE_WINDOW_MIN_CONFIDENCE = 0.005;
+const PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE = 0.65;
+const PROFIT_PER_HOUR_RECENT_WINDOW_MIN_CONFIDENCE = 0.35;
+const PROFIT_PER_HOUR_STALE_WINDOW_MIN_CONFIDENCE = 0.02;
+const PROFIT_PER_HOUR_TOTAL_ORDER_CONFIDENCE_MULTIPLIER = 0.75;
+const PROFIT_PER_HOUR_TOTAL_ORDER_SIDE_SPLIT = 0.5;
 export const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
 export const PROFIT_PER_HOUR_STUB_BUDGET = 75000;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
@@ -139,6 +141,12 @@ const ITEM_QUICK_SELL_BY_TYPE_AND_RARITY: Partial<
     diamond: 1000,
   },
 };
+
+interface ResolvedProfitPerHourLiquidity {
+  buyFillRatePerHour: number;
+  confidence: number;
+  sellFillRatePerHour: number;
+}
 
 export interface ProfitPerHourOptions {
   activeFlipSlots?: number;
@@ -541,10 +549,7 @@ export function getListingProfitPerHour(
   const activeLiquidity = resolveActiveProfitPerHourLiquidity(liquidity);
   const buyFillRatePerHour = activeLiquidity?.buyFillRatePerHour ?? null;
   const sellFillRatePerHour = activeLiquidity?.sellFillRatePerHour ?? null;
-  const confidence =
-    liquidity?.confidence !== undefined && activeLiquidity
-      ? liquidity.confidence * activeLiquidity.confidence
-      : null;
+  const confidence = activeLiquidity?.confidence ?? null;
   const { activeFlipSlots, stubBudget } = resolveProfitPerHourOptions(options);
 
   if (
@@ -596,104 +601,211 @@ export function getListingProfitPerHour(
 
 function resolveActiveProfitPerHourLiquidity(
   liquidity: Listing['storedOrderLiquidity']
-): {
-  buyFillRatePerHour: number;
-  confidence: number;
-  sellFillRatePerHour: number;
-} | null {
+): ResolvedProfitPerHourLiquidity | null {
   if (!liquidity) return null;
 
   if (!hasActiveLiquidityFields(liquidity)) {
-    const buyFillRatePerHour = liquidity.buyFillRatePerHour ?? null;
-    const sellFillRatePerHour = liquidity.sellFillRatePerHour ?? null;
-
-    return buyFillRatePerHour !== null && sellFillRatePerHour !== null
-      ? {
-          buyFillRatePerHour,
-          confidence: 1,
-          sellFillRatePerHour,
-        }
-      : null;
+    return getHistoricalLiquidityCandidate(liquidity);
   }
 
-  const worstSideAgeMinutes = Math.max(
+  const sideMatchAgeMinutes = Math.max(
     minutesSinceSqlUtc(liquidity.lastBuyMatchAt),
     minutesSinceSqlUtc(liquidity.lastSellMatchAt)
   );
+  const orderAgeMinutes = minutesSinceSqlUtc(liquidity.lastOrderAt);
+  const candidates: ResolvedProfitPerHourLiquidity[] = [];
+  const historicalConfidence = Math.max(liquidity.confidence ?? 0, 0.5);
 
-  if (
-    !Number.isFinite(worstSideAgeMinutes) ||
-    worstSideAgeMinutes > PROFIT_PER_HOUR_STALE_WINDOW_MINUTES
-  ) {
-    return null;
-  }
+  addSideMatchLiquidityCandidate(candidates, {
+    buyMatches: liquidity.buyMatches3m ?? 0,
+    confidence: 1,
+    maxAgeMinutes: PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES,
+    sellMatches: liquidity.sellMatches3m ?? 0,
+    sideMatchAgeMinutes,
+    windowMinutes: PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES,
+  });
+  addTotalOrderLiquidityCandidate(candidates, {
+    confidence: 0.95,
+    maxAgeMinutes: PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES,
+    orderAgeMinutes,
+    orderCount: liquidity.recentOrderCount3m ?? 0,
+    windowMinutes: PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES,
+  });
 
-  const buyMatches3m = liquidity.buyMatches3m ?? 0;
-  const sellMatches3m = liquidity.sellMatches3m ?? 0;
-  if (
-    buyMatches3m > 0 &&
-    sellMatches3m > 0 &&
-    worstSideAgeMinutes <= PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES
-  ) {
-    return {
-      buyFillRatePerHour: matchesPerHour(
-        buyMatches3m,
-        PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES
-      ),
-      confidence: 1,
-      sellFillRatePerHour: matchesPerHour(
-        sellMatches3m,
-        PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES
-      ),
-    };
-  }
+  const warmConfidence = getWarmLiquidityConfidence(sideMatchAgeMinutes);
+  addSideMatchLiquidityCandidate(candidates, {
+    buyMatches: liquidity.buyMatches10m ?? 0,
+    confidence: warmConfidence,
+    maxAgeMinutes: PROFIT_PER_HOUR_WARM_WINDOW_MINUTES,
+    sellMatches: liquidity.sellMatches10m ?? 0,
+    sideMatchAgeMinutes,
+    windowMinutes: PROFIT_PER_HOUR_WARM_WINDOW_MINUTES,
+  });
+  addTotalOrderLiquidityCandidate(candidates, {
+    confidence:
+      getWarmLiquidityConfidence(orderAgeMinutes) *
+      PROFIT_PER_HOUR_TOTAL_ORDER_CONFIDENCE_MULTIPLIER,
+    maxAgeMinutes: PROFIT_PER_HOUR_WARM_WINDOW_MINUTES,
+    orderAgeMinutes,
+    orderCount: liquidity.recentOrderCount10m ?? 0,
+    windowMinutes: PROFIT_PER_HOUR_WARM_WINDOW_MINUTES,
+  });
 
-  const buyMatches10m = liquidity.buyMatches10m ?? 0;
-  const sellMatches10m = liquidity.sellMatches10m ?? 0;
-  if (
-    buyMatches10m > 0 &&
-    sellMatches10m > 0 &&
-    worstSideAgeMinutes <= PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
-  ) {
-    return {
-      buyFillRatePerHour: matchesPerHour(
-        buyMatches10m,
-        PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
-      ),
-      confidence: getWarmLiquidityConfidence(worstSideAgeMinutes),
-      sellFillRatePerHour: matchesPerHour(
-        sellMatches10m,
-        PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
-      ),
-    };
-  }
-
-  const buyMatches30m = liquidity.buyMatches30m ?? 0;
-  const sellMatches30m = liquidity.sellMatches30m ?? 0;
-  if (
-    buyMatches30m > 0 &&
-    sellMatches30m > 0 &&
-    worstSideAgeMinutes <= PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
-  ) {
-    return {
-      buyFillRatePerHour: matchesPerHour(
-        buyMatches30m,
-        PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
-      ),
-      confidence: getRecentLiquidityConfidence(worstSideAgeMinutes),
-      sellFillRatePerHour: matchesPerHour(
-        sellMatches30m,
-        PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
-      ),
-    };
-  }
+  const recentConfidence = getRecentLiquidityConfidence(sideMatchAgeMinutes);
+  addSideMatchLiquidityCandidate(candidates, {
+    buyMatches: liquidity.buyMatches30m ?? 0,
+    confidence: recentConfidence,
+    maxAgeMinutes: PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES,
+    sellMatches: liquidity.sellMatches30m ?? 0,
+    sideMatchAgeMinutes,
+    windowMinutes: PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES,
+  });
+  addTotalOrderLiquidityCandidate(candidates, {
+    confidence:
+      getRecentLiquidityConfidence(orderAgeMinutes) *
+      PROFIT_PER_HOUR_TOTAL_ORDER_CONFIDENCE_MULTIPLIER,
+    maxAgeMinutes: PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES,
+    orderAgeMinutes,
+    orderCount: liquidity.recentOrderCount30m ?? 0,
+    windowMinutes: PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES,
+  });
 
   const buyFillRatePerHour = liquidity.buyFillRatePerHour ?? null;
   const sellFillRatePerHour = liquidity.sellFillRatePerHour ?? null;
+  if (
+    buyFillRatePerHour !== null &&
+    sellFillRatePerHour !== null &&
+    Number.isFinite(sideMatchAgeMinutes) &&
+    sideMatchAgeMinutes <= PROFIT_PER_HOUR_STALE_WINDOW_MINUTES
+  ) {
+    candidates.push({
+      buyFillRatePerHour,
+      confidence:
+        getStaleLiquidityConfidence(sideMatchAgeMinutes) * historicalConfidence,
+      sellFillRatePerHour,
+    });
+  }
+  addTotalOrderLiquidityCandidate(candidates, {
+    confidence:
+      getStaleLiquidityConfidence(orderAgeMinutes) *
+      PROFIT_PER_HOUR_TOTAL_ORDER_CONFIDENCE_MULTIPLIER,
+    maxAgeMinutes: PROFIT_PER_HOUR_STALE_WINDOW_MINUTES,
+    orderAgeMinutes,
+    orderCount: liquidity.recentOrderCount60m ?? 0,
+    windowMinutes: PROFIT_PER_HOUR_STALE_WINDOW_MINUTES,
+  });
+
+  return getBestProfitPerHourLiquidityCandidate(candidates);
+}
+
+function addSideMatchLiquidityCandidate(
+  candidates: ResolvedProfitPerHourLiquidity[],
+  {
+    buyMatches,
+    confidence,
+    maxAgeMinutes,
+    sellMatches,
+    sideMatchAgeMinutes,
+    windowMinutes,
+  }: {
+    buyMatches: number;
+    confidence: number;
+    maxAgeMinutes: number;
+    sellMatches: number;
+    sideMatchAgeMinutes: number;
+    windowMinutes: number;
+  }
+) {
+  if (
+    buyMatches <= 0 ||
+    sellMatches <= 0 ||
+    confidence <= 0 ||
+    !Number.isFinite(sideMatchAgeMinutes) ||
+    sideMatchAgeMinutes > maxAgeMinutes
+  ) {
+    return;
+  }
+
+  candidates.push({
+    buyFillRatePerHour: matchesPerHour(buyMatches, windowMinutes),
+    confidence,
+    sellFillRatePerHour: matchesPerHour(sellMatches, windowMinutes),
+  });
+}
+
+function addTotalOrderLiquidityCandidate(
+  candidates: ResolvedProfitPerHourLiquidity[],
+  {
+    confidence,
+    maxAgeMinutes,
+    orderAgeMinutes,
+    orderCount,
+    windowMinutes,
+  }: {
+    confidence: number;
+    maxAgeMinutes: number;
+    orderAgeMinutes: number;
+    orderCount: number;
+    windowMinutes: number;
+  }
+) {
+  if (
+    orderCount <= 0 ||
+    confidence <= 0 ||
+    !Number.isFinite(orderAgeMinutes) ||
+    orderAgeMinutes > maxAgeMinutes
+  ) {
+    return;
+  }
+
+  const estimatedSideFillRatePerHour =
+    matchesPerHour(orderCount, windowMinutes) *
+    PROFIT_PER_HOUR_TOTAL_ORDER_SIDE_SPLIT;
+
+  candidates.push({
+    buyFillRatePerHour: estimatedSideFillRatePerHour,
+    confidence,
+    sellFillRatePerHour: estimatedSideFillRatePerHour,
+  });
+}
+
+function getBestProfitPerHourLiquidityCandidate(
+  candidates: ResolvedProfitPerHourLiquidity[]
+): ResolvedProfitPerHourLiquidity | null {
+  return (
+    candidates
+      .filter(
+        (candidate) =>
+          candidate.buyFillRatePerHour > 0 &&
+          candidate.sellFillRatePerHour > 0 &&
+          candidate.confidence > 0
+      )
+      .sort(
+        (a, b) =>
+          getLiquidityCandidateScore(b) - getLiquidityCandidateScore(a)
+      )[0] ?? null
+  );
+}
+
+function getLiquidityCandidateScore(
+  candidate: ResolvedProfitPerHourLiquidity
+): number {
+  return (
+    Math.min(candidate.buyFillRatePerHour, candidate.sellFillRatePerHour) *
+    candidate.confidence
+  );
+}
+
+function getHistoricalLiquidityCandidate(
+  liquidity: NonNullable<Listing['storedOrderLiquidity']>
+): ResolvedProfitPerHourLiquidity | null {
+  const buyFillRatePerHour = liquidity.buyFillRatePerHour ?? null;
+  const sellFillRatePerHour = liquidity.sellFillRatePerHour ?? null;
+
   return buyFillRatePerHour !== null && sellFillRatePerHour !== null
     ? {
         buyFillRatePerHour,
-        confidence: getStaleLiquidityConfidence(worstSideAgeMinutes),
+        confidence: Math.max(liquidity.confidence ?? 0, 0.5),
         sellFillRatePerHour,
       }
     : null;
