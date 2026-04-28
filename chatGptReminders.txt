@@ -162,9 +162,10 @@ Price, spread, profit, and quick-sell logic
   - `confidence`
 - The current formula is an adjusted expected flip rate:
   - compute current profit from live market buy/sell prices
-  - require matching current-price buy-side and sell-side fills inside the last 10 minutes; if either side has no matching fill in that active window, Profit/hr is treated as unavailable/stale
+  - require matching current-price buy-side and sell-side fills inside the last 30 minutes; if either side has no matching fill in that active window, Profit/hr is treated as unavailable/stale
   - use 3-minute matching counts for full active-now confidence when both sides have fills in the last 3 minutes
   - otherwise use 10-minute matching counts with a sharp recency confidence decay from 3 minutes to 10 minutes
+  - use 30-minute matching counts only as a heavily discounted fallback from 10 minutes to 30 minutes, so sparse/stale cards do not stay highly ranked
   - compute expected cycle time as `(1 / buyFillRatePerHour) + (1 / sellFillRatePerHour) + handlingHours`
   - estimate pipeline throughput as the smaller of observed market throughput (`min(buyFillRatePerHour, sellFillRatePerHour)`) and the human slot cap (`activeFlipSlots / expectedCycleTime`)
   - use `activeFlipSlots = 7` as the default human-realistic number of simultaneous flips
@@ -174,7 +175,7 @@ Price, spread, profit, and quick-sell logic
 - Liquidity window selection:
   - historical confidence still prefers 24h if both buy and sell match counts are at least 3
   - otherwise historical confidence falls back to 7d
-  - active-now Profit/hr eligibility comes from the 3m/10m matching counts, not from the 24h/7d window alone
+  - active-now Profit/hr eligibility comes from the 3m/10m/30m matching counts, not from the 24h/7d window alone
 - Liquidity price matching uses a band of `max(50 stubs, 2% of the reference price)` around:
   - current `best_buy_price` for buy-fill matches
   - current `best_sell_price` for sell-fill matches

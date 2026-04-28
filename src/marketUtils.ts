@@ -80,7 +80,9 @@ const SALE_TAX_RATE = 0.1;
 const PROFIT_PER_HOUR_HANDLING_HOURS = 0.05;
 const PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES = 3;
 const PROFIT_PER_HOUR_WARM_WINDOW_MINUTES = 10;
+const PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES = 30;
 const PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE = 0.2;
+const PROFIT_PER_HOUR_RECENT_WINDOW_MIN_CONFIDENCE = 0.03;
 export const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
 export const PROFIT_PER_HOUR_STUB_BUDGET = 75000;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
@@ -599,6 +601,19 @@ function resolveActiveProfitPerHourLiquidity(
 } | null {
   if (!liquidity) return null;
 
+  if (!hasActiveLiquidityFields(liquidity)) {
+    const buyFillRatePerHour = liquidity.buyFillRatePerHour ?? null;
+    const sellFillRatePerHour = liquidity.sellFillRatePerHour ?? null;
+
+    return buyFillRatePerHour !== null && sellFillRatePerHour !== null
+      ? {
+          buyFillRatePerHour,
+          confidence: 1,
+          sellFillRatePerHour,
+        }
+      : null;
+  }
+
   const worstSideAgeMinutes = Math.max(
     minutesSinceSqlUtc(liquidity.lastBuyMatchAt),
     minutesSinceSqlUtc(liquidity.lastSellMatchAt)
@@ -606,7 +621,7 @@ function resolveActiveProfitPerHourLiquidity(
 
   if (
     !Number.isFinite(worstSideAgeMinutes) ||
-    worstSideAgeMinutes > PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
+    worstSideAgeMinutes > PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
   ) {
     return null;
   }
@@ -633,25 +648,58 @@ function resolveActiveProfitPerHourLiquidity(
 
   const buyMatches10m = liquidity.buyMatches10m ?? 0;
   const sellMatches10m = liquidity.sellMatches10m ?? 0;
-  if (buyMatches10m <= 0 || sellMatches10m <= 0) {
-    return null;
+  if (
+    buyMatches10m > 0 &&
+    sellMatches10m > 0 &&
+    worstSideAgeMinutes <= PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
+  ) {
+    return {
+      buyFillRatePerHour: matchesPerHour(
+        buyMatches10m,
+        PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
+      ),
+      confidence: getWarmLiquidityConfidence(worstSideAgeMinutes),
+      sellFillRatePerHour: matchesPerHour(
+        sellMatches10m,
+        PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
+      ),
+    };
   }
 
-  return {
-    buyFillRatePerHour: matchesPerHour(
-      buyMatches10m,
-      PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
-    ),
-    confidence: getWarmLiquidityConfidence(worstSideAgeMinutes),
-    sellFillRatePerHour: matchesPerHour(
-      sellMatches10m,
-      PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
-    ),
-  };
+  const buyMatches30m = liquidity.buyMatches30m ?? 0;
+  const sellMatches30m = liquidity.sellMatches30m ?? 0;
+  return buyMatches30m > 0 && sellMatches30m > 0
+    ? {
+        buyFillRatePerHour: matchesPerHour(
+          buyMatches30m,
+          PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
+        ),
+        confidence: getRecentLiquidityConfidence(worstSideAgeMinutes),
+        sellFillRatePerHour: matchesPerHour(
+          sellMatches30m,
+          PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
+        ),
+      }
+    : null;
 }
 
 function matchesPerHour(matchCount: number, windowMinutes: number): number {
   return matchCount / (windowMinutes / 60);
+}
+
+function hasActiveLiquidityFields(
+  liquidity: NonNullable<Listing['storedOrderLiquidity']>
+): boolean {
+  return (
+    liquidity.buyMatches3m !== undefined ||
+    liquidity.sellMatches3m !== undefined ||
+    liquidity.buyMatches10m !== undefined ||
+    liquidity.sellMatches10m !== undefined ||
+    liquidity.buyMatches30m !== undefined ||
+    liquidity.sellMatches30m !== undefined ||
+    liquidity.lastBuyMatchAt !== undefined ||
+    liquidity.lastSellMatchAt !== undefined
+  );
 }
 
 function getWarmLiquidityConfidence(worstSideAgeMinutes: number): number {
@@ -663,16 +711,37 @@ function getWarmLiquidityConfidence(worstSideAgeMinutes: number): number {
     return 1;
   }
 
-  const decayProgress =
-    (Math.min(worstSideAgeMinutes, PROFIT_PER_HOUR_WARM_WINDOW_MINUTES) -
-      PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES) /
-    (PROFIT_PER_HOUR_WARM_WINDOW_MINUTES -
-      PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES);
-
-  return (
-    1 -
-    decayProgress * (1 - PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE)
+  return interpolateConfidence(
+    worstSideAgeMinutes,
+    PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES,
+    PROFIT_PER_HOUR_WARM_WINDOW_MINUTES,
+    1,
+    PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE
   );
+}
+
+function getRecentLiquidityConfidence(worstSideAgeMinutes: number): number {
+  return interpolateConfidence(
+    worstSideAgeMinutes,
+    PROFIT_PER_HOUR_WARM_WINDOW_MINUTES,
+    PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES,
+    PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE,
+    PROFIT_PER_HOUR_RECENT_WINDOW_MIN_CONFIDENCE
+  );
+}
+
+function interpolateConfidence(
+  value: number,
+  fromValue: number,
+  toValue: number,
+  fromConfidence: number,
+  toConfidence: number
+): number {
+  const progress =
+    (Math.min(Math.max(value, fromValue), toValue) - fromValue) /
+    (toValue - fromValue);
+
+  return fromConfidence + progress * (toConfidence - fromConfidence);
 }
 
 function minutesSinceSqlUtc(value: string | null | undefined): number {
