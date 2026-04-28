@@ -78,6 +78,9 @@ export const DEFAULT_LIST_SORT: SortKey = 'rank';
 
 const SALE_TAX_RATE = 0.1;
 const PROFIT_PER_HOUR_HANDLING_HOURS = 0.05;
+const PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES = 3;
+const PROFIT_PER_HOUR_WARM_WINDOW_MINUTES = 10;
+const PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE = 0.2;
 export const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
 export const PROFIT_PER_HOUR_STUB_BUDGET = 75000;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
@@ -531,9 +534,13 @@ export function getListingProfitPerHour(
   const profit = calculateProfit(prices);
   const acquisitionCost = prices.sellNow;
   const liquidity = listing.storedOrderLiquidity;
-  const buyFillRatePerHour = liquidity?.buyFillRatePerHour ?? null;
-  const sellFillRatePerHour = liquidity?.sellFillRatePerHour ?? null;
-  const confidence = liquidity?.confidence ?? null;
+  const activeLiquidity = resolveActiveProfitPerHourLiquidity(liquidity);
+  const buyFillRatePerHour = activeLiquidity?.buyFillRatePerHour ?? null;
+  const sellFillRatePerHour = activeLiquidity?.sellFillRatePerHour ?? null;
+  const confidence =
+    liquidity?.confidence !== undefined && activeLiquidity
+      ? liquidity.confidence * activeLiquidity.confidence
+      : null;
   const { activeFlipSlots, stubBudget } = resolveProfitPerHourOptions(options);
 
   if (
@@ -581,6 +588,122 @@ export function getListingProfitPerHour(
   );
 
   return profit * realisticFlipsPerHour * confidence;
+}
+
+function resolveActiveProfitPerHourLiquidity(
+  liquidity: Listing['storedOrderLiquidity']
+): {
+  buyFillRatePerHour: number;
+  confidence: number;
+  sellFillRatePerHour: number;
+} | null {
+  if (!liquidity) return null;
+
+  const worstSideAgeMinutes = Math.max(
+    minutesSinceSqlUtc(liquidity.lastBuyMatchAt),
+    minutesSinceSqlUtc(liquidity.lastSellMatchAt)
+  );
+
+  if (
+    !Number.isFinite(worstSideAgeMinutes) ||
+    worstSideAgeMinutes > PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
+  ) {
+    return null;
+  }
+
+  const buyMatches3m = liquidity.buyMatches3m ?? 0;
+  const sellMatches3m = liquidity.sellMatches3m ?? 0;
+  if (
+    buyMatches3m > 0 &&
+    sellMatches3m > 0 &&
+    worstSideAgeMinutes <= PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES
+  ) {
+    return {
+      buyFillRatePerHour: matchesPerHour(
+        buyMatches3m,
+        PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES
+      ),
+      confidence: 1,
+      sellFillRatePerHour: matchesPerHour(
+        sellMatches3m,
+        PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES
+      ),
+    };
+  }
+
+  const buyMatches10m = liquidity.buyMatches10m ?? 0;
+  const sellMatches10m = liquidity.sellMatches10m ?? 0;
+  if (buyMatches10m <= 0 || sellMatches10m <= 0) {
+    return null;
+  }
+
+  return {
+    buyFillRatePerHour: matchesPerHour(
+      buyMatches10m,
+      PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
+    ),
+    confidence: getWarmLiquidityConfidence(worstSideAgeMinutes),
+    sellFillRatePerHour: matchesPerHour(
+      sellMatches10m,
+      PROFIT_PER_HOUR_WARM_WINDOW_MINUTES
+    ),
+  };
+}
+
+function matchesPerHour(matchCount: number, windowMinutes: number): number {
+  return matchCount / (windowMinutes / 60);
+}
+
+function getWarmLiquidityConfidence(worstSideAgeMinutes: number): number {
+  if (!Number.isFinite(worstSideAgeMinutes)) {
+    return PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE;
+  }
+
+  if (worstSideAgeMinutes <= PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES) {
+    return 1;
+  }
+
+  const decayProgress =
+    (Math.min(worstSideAgeMinutes, PROFIT_PER_HOUR_WARM_WINDOW_MINUTES) -
+      PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES) /
+    (PROFIT_PER_HOUR_WARM_WINDOW_MINUTES -
+      PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES);
+
+  return (
+    1 -
+    decayProgress * (1 - PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE)
+  );
+}
+
+function minutesSinceSqlUtc(value: string | null | undefined): number {
+  const timestamp = parseSqlUtcTimestamp(value);
+
+  if (timestamp === null) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.max((Date.now() - timestamp) / 60000, 0);
+}
+
+function parseSqlUtcTimestamp(value: string | null | undefined): number | null {
+  if (!value) return null;
+
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/
+  );
+  if (!match) {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6])
+  );
 }
 
 export function getListingProfitPerFlip(listing: Listing): number | null {

@@ -58,21 +58,37 @@ interface OrderPriceRow {
 interface CachedLiquidityRow {
   buyFillRatePerHour: number | null;
   buyMatchCount: number;
+  buyMatches3m: number;
+  buyMatches10m: number;
+  buyMatches30m: number;
   confidence: number;
   computedAt: string;
+  lastBuyMatchAt: string | null;
+  lastSellMatchAt: string | null;
   recentOrderCount: number;
   sellFillRatePerHour: number | null;
   sellMatchCount: number;
+  sellMatches3m: number;
+  sellMatches10m: number;
+  sellMatches30m: number;
   uuid: string;
   windowHours: number;
 }
 
 interface LiquidityAggregateRow {
+  buyMatches3m: number | null;
+  buyMatches10m: number | null;
   buyMatches24h: number | null;
+  buyMatches30m: number | null;
   buyMatches7d: number | null;
+  lastBuyMatchAt: string | null;
+  lastSellMatchAt: string | null;
   recentOrderCount24h: number | null;
   recentOrderCount7d: number | null;
+  sellMatches3m: number | null;
+  sellMatches10m: number | null;
   sellMatches24h: number | null;
+  sellMatches30m: number | null;
   sellMatches7d: number | null;
   uuid: string;
 }
@@ -87,6 +103,9 @@ const MARKET_ITEM_TYPES: ItemType[] = [
 ];
 const LIQUIDITY_SHORT_WINDOW_HOURS = 24;
 const LIQUIDITY_LONG_WINDOW_HOURS = 7 * 24;
+const LIQUIDITY_ACTIVE_WINDOW_MINUTES = 3;
+const LIQUIDITY_WARM_WINDOW_MINUTES = 10;
+const LIQUIDITY_RECENT_WINDOW_MINUTES = 30;
 const LIQUIDITY_SHORT_WINDOW_MIN_MATCHES = 3;
 const LIQUIDITY_FULL_CONFIDENCE_MATCHES = 5;
 const LIQUIDITY_PRICE_BAND_MIN_STUBS = 50;
@@ -150,6 +169,14 @@ db.exec(`
     sell_match_count INTEGER NOT NULL,
     recent_order_count INTEGER NOT NULL,
     window_hours INTEGER NOT NULL,
+    buy_matches_3m INTEGER NOT NULL DEFAULT 0,
+    sell_matches_3m INTEGER NOT NULL DEFAULT 0,
+    buy_matches_10m INTEGER NOT NULL DEFAULT 0,
+    sell_matches_10m INTEGER NOT NULL DEFAULT 0,
+    buy_matches_30m INTEGER NOT NULL DEFAULT 0,
+    sell_matches_30m INTEGER NOT NULL DEFAULT 0,
+    last_buy_match_at TEXT,
+    last_sell_match_at TEXT,
     buy_fill_rate_per_hour REAL,
     sell_fill_rate_per_hour REAL,
     confidence REAL NOT NULL,
@@ -169,6 +196,56 @@ db.exec(`
     error TEXT
   );
 `);
+
+const liquiditySchemaChanged = ensureLiquiditySchema();
+
+function ensureLiquiditySchema(): boolean {
+  const existingColumns = new Set(
+    (
+      db.prepare("PRAGMA table_info(market_card_liquidity)").all() as Array<{
+        name: string;
+      }>
+    ).map((column) => column.name),
+  );
+  const columnsToAdd: Array<{ definition: string; name: string }> = [
+    {
+      name: "buy_matches_3m",
+      definition: "buy_matches_3m INTEGER NOT NULL DEFAULT 0",
+    },
+    {
+      name: "sell_matches_3m",
+      definition: "sell_matches_3m INTEGER NOT NULL DEFAULT 0",
+    },
+    {
+      name: "buy_matches_10m",
+      definition: "buy_matches_10m INTEGER NOT NULL DEFAULT 0",
+    },
+    {
+      name: "sell_matches_10m",
+      definition: "sell_matches_10m INTEGER NOT NULL DEFAULT 0",
+    },
+    {
+      name: "buy_matches_30m",
+      definition: "buy_matches_30m INTEGER NOT NULL DEFAULT 0",
+    },
+    {
+      name: "sell_matches_30m",
+      definition: "sell_matches_30m INTEGER NOT NULL DEFAULT 0",
+    },
+    { name: "last_buy_match_at", definition: "last_buy_match_at TEXT" },
+    { name: "last_sell_match_at", definition: "last_sell_match_at TEXT" },
+  ];
+  let changed = false;
+
+  for (const column of columnsToAdd) {
+    if (existingColumns.has(column.name)) continue;
+
+    db.exec(`ALTER TABLE market_card_liquidity ADD COLUMN ${column.definition}`);
+    changed = true;
+  }
+
+  return changed;
+}
 
 const upsertCardStmt = db.prepare(`
   INSERT INTO market_cards (
@@ -280,6 +357,14 @@ const selectCachedLiquidityStmt = db.prepare(`
     sell_match_count AS sellMatchCount,
     recent_order_count AS recentOrderCount,
     window_hours AS windowHours,
+    buy_matches_3m AS buyMatches3m,
+    sell_matches_3m AS sellMatches3m,
+    buy_matches_10m AS buyMatches10m,
+    sell_matches_10m AS sellMatches10m,
+    buy_matches_30m AS buyMatches30m,
+    sell_matches_30m AS sellMatches30m,
+    last_buy_match_at AS lastBuyMatchAt,
+    last_sell_match_at AS lastSellMatchAt,
     buy_fill_rate_per_hour AS buyFillRatePerHour,
     sell_fill_rate_per_hour AS sellFillRatePerHour,
     confidence,
@@ -295,6 +380,14 @@ const selectCachedLiquiditiesStmt = db.prepare(`
     sell_match_count AS sellMatchCount,
     recent_order_count AS recentOrderCount,
     window_hours AS windowHours,
+    buy_matches_3m AS buyMatches3m,
+    sell_matches_3m AS sellMatches3m,
+    buy_matches_10m AS buyMatches10m,
+    sell_matches_10m AS sellMatches10m,
+    buy_matches_30m AS buyMatches30m,
+    sell_matches_30m AS sellMatches30m,
+    last_buy_match_at AS lastBuyMatchAt,
+    last_sell_match_at AS lastSellMatchAt,
     buy_fill_rate_per_hour AS buyFillRatePerHour,
     sell_fill_rate_per_hour AS sellFillRatePerHour,
     confidence,
@@ -351,6 +444,14 @@ const upsertCachedLiquidityStmt = db.prepare(`
     sell_match_count,
     recent_order_count,
     window_hours,
+    buy_matches_3m,
+    sell_matches_3m,
+    buy_matches_10m,
+    sell_matches_10m,
+    buy_matches_30m,
+    sell_matches_30m,
+    last_buy_match_at,
+    last_sell_match_at,
     buy_fill_rate_per_hour,
     sell_fill_rate_per_hour,
     confidence,
@@ -361,6 +462,14 @@ const upsertCachedLiquidityStmt = db.prepare(`
     @sell_match_count,
     @recent_order_count,
     @window_hours,
+    @buy_matches_3m,
+    @sell_matches_3m,
+    @buy_matches_10m,
+    @sell_matches_10m,
+    @buy_matches_30m,
+    @sell_matches_30m,
+    @last_buy_match_at,
+    @last_sell_match_at,
     @buy_fill_rate_per_hour,
     @sell_fill_rate_per_hour,
     @confidence,
@@ -371,6 +480,14 @@ const upsertCachedLiquidityStmt = db.prepare(`
     sell_match_count = excluded.sell_match_count,
     recent_order_count = excluded.recent_order_count,
     window_hours = excluded.window_hours,
+    buy_matches_3m = excluded.buy_matches_3m,
+    sell_matches_3m = excluded.sell_matches_3m,
+    buy_matches_10m = excluded.buy_matches_10m,
+    sell_matches_10m = excluded.sell_matches_10m,
+    buy_matches_30m = excluded.buy_matches_30m,
+    sell_matches_30m = excluded.sell_matches_30m,
+    last_buy_match_at = excluded.last_buy_match_at,
+    last_sell_match_at = excluded.last_sell_match_at,
     buy_fill_rate_per_hour = excluded.buy_fill_rate_per_hour,
     sell_fill_rate_per_hour = excluded.sell_fill_rate_per_hour,
     confidence = excluded.confidence,
@@ -384,6 +501,84 @@ const deleteCachedLiquiditiesStmt = db.prepare(`
 const selectLiquidityAggregatesStmt = db.prepare(`
   SELECT
     mc.uuid,
+    SUM(
+      CASE
+        WHEN o.order_time >= @cutoff_3m
+          AND mc.best_buy_price IS NOT NULL
+          AND mc.best_buy_price > 0
+          AND o.price BETWEEN
+            mc.best_buy_price - MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_buy_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+            AND
+            mc.best_buy_price + MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_buy_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+        THEN 1
+        ELSE 0
+      END
+    ) AS buyMatches3m,
+    SUM(
+      CASE
+        WHEN o.order_time >= @cutoff_3m
+          AND mc.best_sell_price IS NOT NULL
+          AND mc.best_sell_price > 0
+          AND o.price BETWEEN
+            mc.best_sell_price - MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_sell_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+            AND
+            mc.best_sell_price + MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_sell_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+        THEN 1
+        ELSE 0
+      END
+    ) AS sellMatches3m,
+    SUM(
+      CASE
+        WHEN o.order_time >= @cutoff_10m
+          AND mc.best_buy_price IS NOT NULL
+          AND mc.best_buy_price > 0
+          AND o.price BETWEEN
+            mc.best_buy_price - MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_buy_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+            AND
+            mc.best_buy_price + MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_buy_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+        THEN 1
+        ELSE 0
+      END
+    ) AS buyMatches10m,
+    SUM(
+      CASE
+        WHEN o.order_time >= @cutoff_10m
+          AND mc.best_sell_price IS NOT NULL
+          AND mc.best_sell_price > 0
+          AND o.price BETWEEN
+            mc.best_sell_price - MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_sell_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+            AND
+            mc.best_sell_price + MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_sell_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+        THEN 1
+        ELSE 0
+      END
+    ) AS sellMatches10m,
+    SUM(
+      CASE
+        WHEN o.order_time >= @cutoff_30m
+          AND mc.best_buy_price IS NOT NULL
+          AND mc.best_buy_price > 0
+          AND o.price BETWEEN
+            mc.best_buy_price - MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_buy_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+            AND
+            mc.best_buy_price + MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_buy_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+        THEN 1
+        ELSE 0
+      END
+    ) AS buyMatches30m,
+    SUM(
+      CASE
+        WHEN o.order_time >= @cutoff_30m
+          AND mc.best_sell_price IS NOT NULL
+          AND mc.best_sell_price > 0
+          AND o.price BETWEEN
+            mc.best_sell_price - MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_sell_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+            AND
+            mc.best_sell_price + MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_sell_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+        THEN 1
+        ELSE 0
+      END
+    ) AS sellMatches30m,
     SUM(
       CASE
         WHEN o.order_time >= @cutoff_24
@@ -434,6 +629,30 @@ const selectLiquidityAggregatesStmt = db.prepare(`
         ELSE 0
       END
     ) AS sellMatches7d,
+    MAX(
+      CASE
+        WHEN mc.best_buy_price IS NOT NULL
+          AND mc.best_buy_price > 0
+          AND o.price BETWEEN
+            mc.best_buy_price - MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_buy_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+            AND
+            mc.best_buy_price + MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_buy_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+        THEN o.order_time
+        ELSE NULL
+      END
+    ) AS lastBuyMatchAt,
+    MAX(
+      CASE
+        WHEN mc.best_sell_price IS NOT NULL
+          AND mc.best_sell_price > 0
+          AND o.price BETWEEN
+            mc.best_sell_price - MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_sell_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+            AND
+            mc.best_sell_price + MAX(${LIQUIDITY_PRICE_BAND_MIN_STUBS}, CAST(ROUND(mc.best_sell_price * ${LIQUIDITY_PRICE_BAND_PERCENT}, 0) AS INTEGER))
+        THEN o.order_time
+        ELSE NULL
+      END
+    ) AS lastSellMatchAt,
     SUM(CASE WHEN o.order_time >= @cutoff_24 THEN 1 ELSE 0 END) AS recentOrderCount24h,
     COUNT(o.uuid) AS recentOrderCount7d
   FROM market_cards mc
@@ -447,6 +666,72 @@ const selectLiquidityAggregatesStmt = db.prepare(`
 const selectLiquidityAggregateForUuidStmt = db.prepare(`
   SELECT
     @uuid AS uuid,
+    SUM(
+      CASE
+        WHEN order_time >= @cutoff_3m
+          AND @best_buy_price IS NOT NULL
+          AND @best_buy_price > 0
+          AND price BETWEEN @best_buy_price - @buy_band_width
+                        AND @best_buy_price + @buy_band_width
+        THEN 1
+        ELSE 0
+      END
+    ) AS buyMatches3m,
+    SUM(
+      CASE
+        WHEN order_time >= @cutoff_3m
+          AND @best_sell_price IS NOT NULL
+          AND @best_sell_price > 0
+          AND price BETWEEN @best_sell_price - @sell_band_width
+                        AND @best_sell_price + @sell_band_width
+        THEN 1
+        ELSE 0
+      END
+    ) AS sellMatches3m,
+    SUM(
+      CASE
+        WHEN order_time >= @cutoff_10m
+          AND @best_buy_price IS NOT NULL
+          AND @best_buy_price > 0
+          AND price BETWEEN @best_buy_price - @buy_band_width
+                        AND @best_buy_price + @buy_band_width
+        THEN 1
+        ELSE 0
+      END
+    ) AS buyMatches10m,
+    SUM(
+      CASE
+        WHEN order_time >= @cutoff_10m
+          AND @best_sell_price IS NOT NULL
+          AND @best_sell_price > 0
+          AND price BETWEEN @best_sell_price - @sell_band_width
+                        AND @best_sell_price + @sell_band_width
+        THEN 1
+        ELSE 0
+      END
+    ) AS sellMatches10m,
+    SUM(
+      CASE
+        WHEN order_time >= @cutoff_30m
+          AND @best_buy_price IS NOT NULL
+          AND @best_buy_price > 0
+          AND price BETWEEN @best_buy_price - @buy_band_width
+                        AND @best_buy_price + @buy_band_width
+        THEN 1
+        ELSE 0
+      END
+    ) AS buyMatches30m,
+    SUM(
+      CASE
+        WHEN order_time >= @cutoff_30m
+          AND @best_sell_price IS NOT NULL
+          AND @best_sell_price > 0
+          AND price BETWEEN @best_sell_price - @sell_band_width
+                        AND @best_sell_price + @sell_band_width
+        THEN 1
+        ELSE 0
+      END
+    ) AS sellMatches30m,
     SUM(
       CASE
         WHEN order_time >= @cutoff_24
@@ -489,6 +774,26 @@ const selectLiquidityAggregateForUuidStmt = db.prepare(`
         ELSE 0
       END
     ) AS sellMatches7d,
+    MAX(
+      CASE
+        WHEN @best_buy_price IS NOT NULL
+          AND @best_buy_price > 0
+          AND price BETWEEN @best_buy_price - @buy_band_width
+                        AND @best_buy_price + @buy_band_width
+        THEN order_time
+        ELSE NULL
+      END
+    ) AS lastBuyMatchAt,
+    MAX(
+      CASE
+        WHEN @best_sell_price IS NOT NULL
+          AND @best_sell_price > 0
+          AND price BETWEEN @best_sell_price - @sell_band_width
+                        AND @best_sell_price + @sell_band_width
+        THEN order_time
+        ELSE NULL
+      END
+    ) AS lastSellMatchAt,
     SUM(CASE WHEN order_time >= @cutoff_24 THEN 1 ELSE 0 END) AS recentOrderCount24h,
     COUNT(*) AS recentOrderCount7d
   FROM stored_completed_orders
@@ -508,6 +813,7 @@ async function main() {
   }
 
   warmAverageCacheIfEmpty();
+  refreshLiquidityCacheAfterSchemaChange();
   warmLiquidityCacheIfEmpty();
   startHttpServer();
   void collectOnce({ limit: cliOptions.limit }).catch((error) => {
@@ -958,6 +1264,25 @@ function warmLiquidityCacheIfEmpty() {
   );
 }
 
+function refreshLiquidityCacheAfterSchemaChange() {
+  if (
+    !liquiditySchemaChanged ||
+    countTable("market_cards") === 0 ||
+    countTable("stored_completed_orders") === 0
+  ) {
+    return;
+  }
+
+  const startedAt = Date.now();
+  console.log("Refreshing cached liquidity stats for active recency fields...");
+  const refreshedCount = refreshLiquidityCache(new Date().toISOString());
+  console.log(
+    `Refreshed ${refreshedCount} liquidity row(s) in ${Math.round(
+      (Date.now() - startedAt) / 1000,
+    )} second(s).`,
+  );
+}
+
 function rebuildAverageCache(computedAt: string): number {
   let currentUuid: string | null = null;
   let prices: number[] = [];
@@ -1003,19 +1328,7 @@ function refreshCachedAverageForUuid(uuid: string, computedAt: string) {
 }
 
 function rebuildLiquidityCache(computedAt: string): number {
-  const now = Date.now();
-  const cutoff24 = toSqlDateTimeUtc(
-    new Date(now - LIQUIDITY_SHORT_WINDOW_HOURS * 60 * 60 * 1000),
-  );
-  const cutoff7d = toSqlDateTimeUtc(
-    new Date(now - LIQUIDITY_LONG_WINDOW_HOURS * 60 * 60 * 1000),
-  );
-  const rows = selectLiquidityAggregatesStmt.all(
-    toSqlParams({
-      cutoff_24: cutoff24,
-      cutoff_7d: cutoff7d,
-    }),
-  ) as unknown as LiquidityAggregateRow[];
+  const rows = selectLiquidityAggregateRows();
 
   withTransaction(() => {
     deleteCachedLiquiditiesStmt.run();
@@ -1028,6 +1341,44 @@ function rebuildLiquidityCache(computedAt: string): number {
   return rows.length;
 }
 
+function refreshLiquidityCache(computedAt: string): number {
+  const rows = selectLiquidityAggregateRows();
+
+  withTransaction(() => {
+    for (const row of rows) {
+      upsertCachedLiquidity(buildCachedLiquidityRow(row, computedAt));
+    }
+  });
+
+  return rows.length;
+}
+
+function selectLiquidityAggregateRows(): LiquidityAggregateRow[] {
+  return selectLiquidityAggregatesStmt.all(
+    toSqlParams(getLiquidityCutoffParams(Date.now())),
+  ) as unknown as LiquidityAggregateRow[];
+}
+
+function getLiquidityCutoffParams(now: number): SqlParams {
+  return {
+    cutoff_3m: toSqlDateTimeUtc(
+      new Date(now - LIQUIDITY_ACTIVE_WINDOW_MINUTES * 60 * 1000),
+    ),
+    cutoff_10m: toSqlDateTimeUtc(
+      new Date(now - LIQUIDITY_WARM_WINDOW_MINUTES * 60 * 1000),
+    ),
+    cutoff_30m: toSqlDateTimeUtc(
+      new Date(now - LIQUIDITY_RECENT_WINDOW_MINUTES * 60 * 1000),
+    ),
+    cutoff_24: toSqlDateTimeUtc(
+      new Date(now - LIQUIDITY_SHORT_WINDOW_HOURS * 60 * 60 * 1000),
+    ),
+    cutoff_7d: toSqlDateTimeUtc(
+      new Date(now - LIQUIDITY_LONG_WINDOW_HOURS * 60 * 60 * 1000),
+    ),
+  };
+}
+
 function refreshCachedLiquidityForListing(listing: Listing, computedAt: string) {
   const uuid = listing.item?.uuid;
   if (!uuid) return;
@@ -1038,12 +1389,7 @@ function refreshCachedLiquidityForListing(listing: Listing, computedAt: string) 
   const aggregate = selectLiquidityAggregateForUuidStmt.get(
     toSqlParams({
       uuid,
-      cutoff_24: toSqlDateTimeUtc(
-        new Date(now - LIQUIDITY_SHORT_WINDOW_HOURS * 60 * 60 * 1000),
-      ),
-      cutoff_7d: toSqlDateTimeUtc(
-        new Date(now - LIQUIDITY_LONG_WINDOW_HOURS * 60 * 60 * 1000),
-      ),
+      ...getLiquidityCutoffParams(now),
       best_buy_price: bestBuyPrice,
       best_sell_price: bestSellPrice,
       buy_band_width: getLiquidityBandWidth(bestBuyPrice),
@@ -1054,11 +1400,19 @@ function refreshCachedLiquidityForListing(listing: Listing, computedAt: string) 
   upsertCachedLiquidity(
     buildCachedLiquidityRow(
       aggregate ?? {
+        buyMatches3m: 0,
+        buyMatches10m: 0,
         buyMatches24h: 0,
+        buyMatches30m: 0,
         buyMatches7d: 0,
+        lastBuyMatchAt: null,
+        lastSellMatchAt: null,
         recentOrderCount24h: 0,
         recentOrderCount7d: 0,
+        sellMatches3m: 0,
+        sellMatches10m: 0,
         sellMatches24h: 0,
+        sellMatches30m: 0,
         sellMatches7d: 0,
         uuid,
       },
@@ -1094,6 +1448,14 @@ function upsertCachedLiquidity(row: CachedLiquidityRow) {
       sell_match_count: row.sellMatchCount,
       recent_order_count: row.recentOrderCount,
       window_hours: row.windowHours,
+      buy_matches_3m: row.buyMatches3m,
+      sell_matches_3m: row.sellMatches3m,
+      buy_matches_10m: row.buyMatches10m,
+      sell_matches_10m: row.sellMatches10m,
+      buy_matches_30m: row.buyMatches30m,
+      sell_matches_30m: row.sellMatches30m,
+      last_buy_match_at: row.lastBuyMatchAt,
+      last_sell_match_at: row.lastSellMatchAt,
       buy_fill_rate_per_hour: row.buyFillRatePerHour,
       sell_fill_rate_per_hour: row.sellFillRatePerHour,
       confidence: row.confidence,
@@ -1106,8 +1468,14 @@ function buildCachedLiquidityRow(
   row: LiquidityAggregateRow,
   computedAt: string,
 ): CachedLiquidityRow {
+  const buyMatches3m = positiveInt(row.buyMatches3m);
+  const sellMatches3m = positiveInt(row.sellMatches3m);
+  const buyMatches10m = positiveInt(row.buyMatches10m);
+  const sellMatches10m = positiveInt(row.sellMatches10m);
   const buyMatches24h = positiveInt(row.buyMatches24h);
   const sellMatches24h = positiveInt(row.sellMatches24h);
+  const buyMatches30m = positiveInt(row.buyMatches30m);
+  const sellMatches30m = positiveInt(row.sellMatches30m);
   const buyMatches7d = positiveInt(row.buyMatches7d);
   const sellMatches7d = positiveInt(row.sellMatches7d);
   const recentOrderCount24h = positiveInt(row.recentOrderCount24h);
@@ -1128,9 +1496,17 @@ function buildCachedLiquidityRow(
   return {
     uuid: row.uuid,
     buyMatchCount,
+    buyMatches3m,
+    buyMatches10m,
+    buyMatches30m,
     sellMatchCount,
+    sellMatches3m,
+    sellMatches10m,
+    sellMatches30m,
     recentOrderCount,
     windowHours,
+    lastBuyMatchAt: stringOrNull(row.lastBuyMatchAt),
+    lastSellMatchAt: stringOrNull(row.lastSellMatchAt),
     buyFillRatePerHour:
       buyMatchCount > 0 ? buyMatchCount / windowHours : null,
     sellFillRatePerHour:

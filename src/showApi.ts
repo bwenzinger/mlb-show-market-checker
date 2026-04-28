@@ -78,11 +78,19 @@ export interface StoredOrderAverage {
 export interface StoredOrderLiquidity {
   buyFillRatePerHour: number | null;
   buyMatchCount: number;
+  buyMatches3m?: number;
+  buyMatches10m?: number;
+  buyMatches30m?: number;
   confidence: number;
   computedAt: string;
+  lastBuyMatchAt?: string | null;
+  lastSellMatchAt?: string | null;
   recentOrderCount: number;
   sellFillRatePerHour: number | null;
   sellMatchCount: number;
+  sellMatches3m?: number;
+  sellMatches10m?: number;
+  sellMatches30m?: number;
   uuid: string;
   windowHours: number;
 }
