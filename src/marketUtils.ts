@@ -81,8 +81,10 @@ const PROFIT_PER_HOUR_HANDLING_HOURS = 0.05;
 const PROFIT_PER_HOUR_ACTIVE_WINDOW_MINUTES = 3;
 const PROFIT_PER_HOUR_WARM_WINDOW_MINUTES = 10;
 const PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES = 30;
+const PROFIT_PER_HOUR_STALE_WINDOW_MINUTES = 60;
 const PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE = 0.2;
 const PROFIT_PER_HOUR_RECENT_WINDOW_MIN_CONFIDENCE = 0.03;
+const PROFIT_PER_HOUR_STALE_WINDOW_MIN_CONFIDENCE = 0.005;
 export const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
 export const PROFIT_PER_HOUR_STUB_BUDGET = 75000;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
@@ -621,7 +623,7 @@ function resolveActiveProfitPerHourLiquidity(
 
   if (
     !Number.isFinite(worstSideAgeMinutes) ||
-    worstSideAgeMinutes > PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
+    worstSideAgeMinutes > PROFIT_PER_HOUR_STALE_WINDOW_MINUTES
   ) {
     return null;
   }
@@ -668,17 +670,31 @@ function resolveActiveProfitPerHourLiquidity(
 
   const buyMatches30m = liquidity.buyMatches30m ?? 0;
   const sellMatches30m = liquidity.sellMatches30m ?? 0;
-  return buyMatches30m > 0 && sellMatches30m > 0
+  if (
+    buyMatches30m > 0 &&
+    sellMatches30m > 0 &&
+    worstSideAgeMinutes <= PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
+  ) {
+    return {
+      buyFillRatePerHour: matchesPerHour(
+        buyMatches30m,
+        PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
+      ),
+      confidence: getRecentLiquidityConfidence(worstSideAgeMinutes),
+      sellFillRatePerHour: matchesPerHour(
+        sellMatches30m,
+        PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
+      ),
+    };
+  }
+
+  const buyFillRatePerHour = liquidity.buyFillRatePerHour ?? null;
+  const sellFillRatePerHour = liquidity.sellFillRatePerHour ?? null;
+  return buyFillRatePerHour !== null && sellFillRatePerHour !== null
     ? {
-        buyFillRatePerHour: matchesPerHour(
-          buyMatches30m,
-          PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
-        ),
-        confidence: getRecentLiquidityConfidence(worstSideAgeMinutes),
-        sellFillRatePerHour: matchesPerHour(
-          sellMatches30m,
-          PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES
-        ),
+        buyFillRatePerHour,
+        confidence: getStaleLiquidityConfidence(worstSideAgeMinutes),
+        sellFillRatePerHour,
       }
     : null;
 }
@@ -727,6 +743,16 @@ function getRecentLiquidityConfidence(worstSideAgeMinutes: number): number {
     PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES,
     PROFIT_PER_HOUR_WARM_WINDOW_MIN_CONFIDENCE,
     PROFIT_PER_HOUR_RECENT_WINDOW_MIN_CONFIDENCE
+  );
+}
+
+function getStaleLiquidityConfidence(worstSideAgeMinutes: number): number {
+  return interpolateConfidence(
+    worstSideAgeMinutes,
+    PROFIT_PER_HOUR_RECENT_WINDOW_MINUTES,
+    PROFIT_PER_HOUR_STALE_WINDOW_MINUTES,
+    PROFIT_PER_HOUR_RECENT_WINDOW_MIN_CONFIDENCE,
+    PROFIT_PER_HOUR_STALE_WINDOW_MIN_CONFIDENCE
   );
 }
 

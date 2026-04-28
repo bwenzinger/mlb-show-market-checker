@@ -162,10 +162,11 @@ Price, spread, profit, and quick-sell logic
   - `confidence`
 - The current formula is an adjusted expected flip rate:
   - compute current profit from live market buy/sell prices
-  - require matching current-price buy-side and sell-side fills inside the last 30 minutes; if either side has no matching fill in that active window, Profit/hr is treated as unavailable/stale
+  - require matching current-price buy-side and sell-side fills inside the last 60 minutes; if either side has no matching fill in that active window, Profit/hr is treated as unavailable/stale
   - use 3-minute matching counts for full active-now confidence when both sides have fills in the last 3 minutes
   - otherwise use 10-minute matching counts with a sharp recency confidence decay from 3 minutes to 10 minutes
-  - use 30-minute matching counts only as a heavily discounted fallback from 10 minutes to 30 minutes, so sparse/stale cards do not stay highly ranked
+  - use 30-minute matching counts only as a heavily discounted fallback from 10 minutes to 30 minutes
+  - use historical cached fill rates as an extremely low-confidence fallback from 30 minutes to 60 minutes, so active cards still get a rough Profit/hr while cards with no matching current-price activity in the last hour go stale
   - compute expected cycle time as `(1 / buyFillRatePerHour) + (1 / sellFillRatePerHour) + handlingHours`
   - estimate pipeline throughput as the smaller of observed market throughput (`min(buyFillRatePerHour, sellFillRatePerHour)`) and the human slot cap (`activeFlipSlots / expectedCycleTime`)
   - use `activeFlipSlots = 7` as the default human-realistic number of simultaneous flips
@@ -245,6 +246,7 @@ Cached liquidity source of truth
   - `/api/cards/liquidity`
 - Backend can also expose:
   - `/api/cards/:uuid/liquidity`
+- The `/api/show/listings.json` proxy refreshes cached liquidity rows for returned listings using current live listing prices before the frontend reads `/api/cards/liquidity`; this keeps list-level Profit/hr aligned with the same current-price bands users see after opening a detail row.
 - Collection and on-demand detail refresh should refresh cached liquidity for the affected UUID so the stored price bands stay aligned with current market prices.
 - Startup should warm `market_card_liquidity` once if the table is empty and local order history already exists.
 - Additive liquidity-cache schema changes may trigger a non-destructive refresh of cached liquidity rows so new recency fields are populated without clearing stored order history.

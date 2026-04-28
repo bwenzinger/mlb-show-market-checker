@@ -175,22 +175,20 @@ export default function App() {
         let nextListings: Listing[];
 
         if (needsNewFetch) {
-          const [
-            fetchedListings,
-            storedOrderAverages,
-            storedOrderLiquidities,
-          ] = await Promise.all([
-            fetchListingsByTypeAndRarity({
-              itemType: params?.itemType,
-              name: params?.query ? params.query.trim() : undefined,
-              rarity: params?.rarity || undefined,
-              series: params?.series,
-            }),
-            fetchStoredOrderAverages().catch(
-              () => new Map<string, StoredOrderAverage>()
-            ),
-            fetchStoredOrderLiquidities().catch(() => new Map()),
-          ]);
+          const fetchedListings = await fetchListingsByTypeAndRarity({
+            itemType: params?.itemType,
+            name: params?.query ? params.query.trim() : undefined,
+            rarity: params?.rarity || undefined,
+            series: params?.series,
+          });
+
+          const [storedOrderAverages, storedOrderLiquidities] =
+            await Promise.all([
+              fetchStoredOrderAverages().catch(
+                () => new Map<string, StoredOrderAverage>()
+              ),
+              fetchStoredOrderLiquidities().catch(() => new Map()),
+            ]);
 
           nextListings = fetchedListings.map((listing) => {
             const uuid = listing.item?.uuid;

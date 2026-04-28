@@ -847,7 +847,7 @@ function startHttpServer() {
   });
 
   app.get("/api/show/listings.json", async (req, res) => {
-    await sendShowApiJson(req, res, "/listings.json");
+    await sendShowListingsJson(req, res);
   });
 
   app.get("/api/show/items.json", async (req, res) => {
@@ -982,6 +982,31 @@ async function sendShowApiJson(
 ) {
   try {
     const json = await requestJson<unknown>(path, toShowSearchParams(req.query));
+    res.json(json);
+  } catch (error) {
+    res.status(502).json({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function sendShowListingsJson(req: Request, res: Response) {
+  try {
+    const json = await requestJson<ListingsResponse>(
+      "/listings.json",
+      toShowSearchParams(req.query),
+    );
+
+    try {
+      refreshCachedLiquidityForListings(json.listings ?? [], new Date().toISOString());
+    } catch (error) {
+      console.error(
+        "Failed to refresh listing-page liquidity:",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
     res.json(json);
   } catch (error) {
     res.status(502).json({
@@ -1225,6 +1250,23 @@ function refreshLiquidityCacheAfterPersist(
   if (!uuid) return;
 
   refreshCachedLiquidityForListing(listing, computedAt);
+}
+
+function refreshCachedLiquidityForListings(
+  listings: Listing[],
+  computedAt: string,
+) {
+  if (listings.length === 0) return;
+
+  withTransaction(() => {
+    for (const listing of listings) {
+      upsertMarketCard(listing, computedAt);
+    }
+  });
+
+  for (const listing of listings) {
+    refreshCachedLiquidityForListing(listing, computedAt);
+  }
 }
 
 function warmAverageCacheIfEmpty() {
