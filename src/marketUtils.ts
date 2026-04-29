@@ -1,5 +1,4 @@
 import {
-  fetchItems,
   fetchListings,
   type ApiSortKey,
   type CompletedOrder,
@@ -7,7 +6,6 @@ import {
   MARKET_ITEM_TYPES,
   type Listing,
   type ListingPriceHistoryPoint,
-  type ShowItem,
   type SortKey,
   type SortOrder,
 } from './showApi';
@@ -87,8 +85,8 @@ const PROFIT_PER_HOUR_RECENT_WINDOW_MIN_CONFIDENCE = 0.35;
 const PROFIT_PER_HOUR_STALE_WINDOW_MIN_CONFIDENCE = 0.02;
 const PROFIT_PER_HOUR_TOTAL_ORDER_CONFIDENCE_MULTIPLIER = 0.75;
 const PROFIT_PER_HOUR_TOTAL_ORDER_SIDE_SPLIT = 0.5;
-export const PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
-export const PROFIT_PER_HOUR_STUB_BUDGET = 75000;
+export const DEFAULT_PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS = 7;
+export const DEFAULT_PROFIT_PER_HOUR_STUB_BUDGET = 75000;
 const PLAYER_CARD_QUICK_SELL_VALUES = [
   { maxOvr: 64, live: 5, nonLive: 2 },
   { maxOvr: 74, live: 25, nonLive: 12 },
@@ -367,7 +365,6 @@ export async function fetchListingsByTypeAndRarity({
   itemType,
   name,
   rarity,
-  series,
 }: {
   itemType?: ItemType | '';
   minSpreadForPercent?: number;
@@ -381,13 +378,7 @@ export async function fetchListingsByTypeAndRarity({
     itemType,
     rarity,
   });
-  const catalogSeries = normalizeSeriesValue(series)
-    ? series
-    : inferCatalogSeriesFromSearch(marketListings, normalizedName);
-  const allListings = shouldSupplementPlayerCatalog(itemType, catalogSeries)
-    ? await mergePlayerCatalogListings(marketListings, catalogSeries)
-    : marketListings;
-  const matchingListings = allListings.filter(
+  const matchingListings = marketListings.filter(
     (listing) =>
       listingMatchesItemType(listing, itemType) &&
       listingMatchesRarity(listing, rarity) &&
@@ -437,11 +428,11 @@ export function resolveProfitPerHourOptions(
   return {
     activeFlipSlots: positiveIntegerOrDefault(
       options.activeFlipSlots,
-      PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS
+      DEFAULT_PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS
     ),
     stubBudget: positiveIntegerOrDefault(
       options.stubBudget,
-      PROFIT_PER_HOUR_STUB_BUDGET
+      DEFAULT_PROFIT_PER_HOUR_STUB_BUDGET
     ),
   };
 }
@@ -781,8 +772,7 @@ function getBestProfitPerHourLiquidityCandidate(
           candidate.confidence > 0
       )
       .sort(
-        (a, b) =>
-          getLiquidityCandidateScore(b) - getLiquidityCandidateScore(a)
+        (a, b) => getLiquidityCandidateScore(b) - getLiquidityCandidateScore(a)
       )[0] ?? null
   );
 }
@@ -1254,112 +1244,6 @@ async function fetchAllListingsForType(
   return [...(firstResponse.listings ?? []), ...remainingListings.flat()];
 }
 
-async function fetchAllItemsForType(type: ItemType): Promise<ShowItem[]> {
-  const firstResponse = await fetchItems({
-    page: 1,
-    type,
-  });
-
-  if (firstResponse.total_pages <= 1) {
-    return firstResponse.items ?? [];
-  }
-
-  const totalPages = Math.max(Number(firstResponse.total_pages) || 1, 1);
-  const remainingPages = Array.from(
-    { length: totalPages - 1 },
-    (_, index) => index + 2
-  );
-  const remainingItems = await mapWithConcurrency(
-    remainingPages,
-    6,
-    async (page) => {
-      const response = await fetchItems({
-        page,
-        type,
-      });
-
-      return response.items ?? [];
-    }
-  );
-
-  return [...(firstResponse.items ?? []), ...remainingItems.flat()];
-}
-
-async function mergePlayerCatalogListings(
-  marketListings: Listing[],
-  series: string | undefined
-): Promise<Listing[]> {
-  const normalizedSeries = normalizeSeriesValue(series);
-  if (!normalizedSeries) return marketListings;
-
-  const catalogItems = await fetchAllItemsForType('mlb_card');
-  const listingsByUuid = new Map<string, Listing>();
-
-  for (const listing of marketListings) {
-    const uuid = listing.item?.uuid;
-    if (uuid) {
-      listingsByUuid.set(uuid, listing);
-    }
-  }
-
-  for (const item of catalogItems) {
-    if (!item.uuid) continue;
-    if (normalizeSeriesValue(item.series) !== normalizedSeries) continue;
-    if (listingsByUuid.has(item.uuid)) continue;
-
-    listingsByUuid.set(item.uuid, {
-      best_buy_price: null,
-      best_sell_price: null,
-      item,
-      listing_name: item.name ?? null,
-    });
-  }
-
-  return [...listingsByUuid.values()];
-}
-
-function shouldSupplementPlayerCatalog(
-  itemType: ItemType | '' | undefined,
-  series: string | undefined
-): boolean {
-  return (
-    (!itemType || itemType === 'mlb_card') &&
-    Boolean(normalizeSeriesValue(series))
-  );
-}
-
-function inferCatalogSeriesFromSearch(
-  listings: Listing[],
-  normalizedNeedle: string
-): string | undefined {
-  if (!normalizedNeedle) return undefined;
-
-  const seriesByKey = new Map<string, string>();
-
-  for (const listing of listings) {
-    const series = listing.item?.series?.trim();
-    if (!series) continue;
-
-    const normalizedSeries = normalizeSearchText(series);
-    if (normalizedSeries && !seriesByKey.has(normalizedSeries)) {
-      seriesByKey.set(normalizedSeries, series);
-    }
-  }
-
-  const compactNeedle = compactSearchText(normalizedNeedle);
-
-  return [...seriesByKey.entries()]
-    .sort((a, b) => b[0].length - a[0].length)
-    .find(([normalizedSeries]) => {
-      const compactSeries = compactSearchText(normalizedSeries);
-
-      return (
-        normalizedNeedle.includes(normalizedSeries) ||
-        compactNeedle.includes(compactSeries)
-      );
-    })?.[1];
-}
-
 function listingMatchesItemType(
   listing: Listing,
   itemType?: ItemType | ''
@@ -1402,10 +1286,6 @@ function listingMatchesNormalizedSearch(
       .split(/\s+/)
       .every((token) => searchTokenMatches(searchableText, token))
   );
-}
-
-function normalizeSeriesValue(value: string | null | undefined): string {
-  return value?.trim().toLowerCase() ?? '';
 }
 
 function searchTokenMatches(searchableText: string, token: string): boolean {

@@ -32,8 +32,8 @@ import {
   isUsingQuickSellFallback,
   itemTypeOptions,
   normalizeSort,
-  PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS,
-  PROFIT_PER_HOUR_STUB_BUDGET,
+  DEFAULT_PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS,
+  DEFAULT_PROFIT_PER_HOUR_STUB_BUDGET,
   rarityOptions,
   resolveSortDirection,
   titleCase,
@@ -240,10 +240,10 @@ export const SearchPanel = function SearchPanel({
   const starredOnly = params?.starredOnly === '1';
   const profitHrActiveFlipSlots =
     parsePositiveQueryInteger(params?.profitHrActiveFlipSlots) ??
-    PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS;
+    DEFAULT_PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS;
   const profitHrStubBudget =
     parsePositiveQueryInteger(params?.profitHrStubBudget) ??
-    PROFIT_PER_HOUR_STUB_BUDGET;
+    DEFAULT_PROFIT_PER_HOUR_STUB_BUDGET;
   const profitPerHourOptions = {
     activeFlipSlots: profitHrActiveFlipSlots,
     stubBudget: profitHrStubBudget,
@@ -580,7 +580,7 @@ export const SearchPanel = function SearchPanel({
                 setQueryParams({
                   profitHrStubBudget: toPositiveQueryValue(
                     event.target.value,
-                    PROFIT_PER_HOUR_STUB_BUDGET
+                    DEFAULT_PROFIT_PER_HOUR_STUB_BUDGET
                   ),
                 })
               }
@@ -595,7 +595,7 @@ export const SearchPanel = function SearchPanel({
                 setQueryParams({
                   profitHrActiveFlipSlots: toPositiveQueryValue(
                     event.target.value,
-                    PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS
+                    DEFAULT_PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS
                   ),
                 })
               }

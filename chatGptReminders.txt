@@ -76,7 +76,7 @@ List data flow
 - Search text currently participates in the fetch key, then matching is applied locally after fetched listing pages are loaded.
 - Post-query filters (`series`, min/max buy/sell, and spread minimum) should reuse the current fetched listing array for normal filtering work.
 - `starredOnly` is a local post-query filter using the user's locally starred UUID list; changing it or starring/unstarring an item should not refetch listings.
-- Series is still applied locally, but player-card series views need one extra data source: when a player/all-type series filter is selected, or when the search text clearly names a series, `fetchListingsByTypeAndRarity` supplements market listings with matching `items.json` catalog cards. This is required because `/listings.json` only contains market/sellable listings, while complete series checklists can include non-sellable cards.
+- Series is still applied locally, and list views should currently include market listings only. Do not supplement player-card series/search results with `/items.json` catalog-only cards for now; cards not present in `/listings.json` should be omitted from the market list.
 - `App.tsx` stores the fetched/enriched list in `allListings`, applies post-query filters and sorting, then sets `filteredListings` for `SearchPanel`.
 
 Search behavior
@@ -91,7 +91,7 @@ Search behavior
 - Compact matching supports no-space variants.
 - Token fallback supports phrases like `spring breakout cards` matching cards whose series is `Spring Breakout` and type label is `MLB Card`.
 - This exists because series searches such as "Spring Breakout cards" should not depend on player names containing the words "Spring Breakout".
-- If search text contains a known series phrase, player-card results are supplemented from `items.json` so complete set/checklist searches include non-sellable catalog cards too.
+- Search results currently come from market listings only; do not include non-sellable catalog-only cards from `items.json` in the market list.
 
 Type, rarity, and series filtering
 - Main type options:
@@ -110,7 +110,7 @@ Type, rarity, and series filtering
   - common
 - Series is a post-query filter shown in the filter drawer.
 - Series options are derived dynamically from the current fetched listing set. Do not hard-code the series list; new API values should appear automatically.
-- Player-card series lists can include catalog-only cards from `/api/show/items.json`. These rows have no market buy-now/sell-now price and should sort to the bottom of price sorts.
+- Player-card series lists currently include only cards returned by `/api/show/listings.json`; catalog-only cards from `/api/show/items.json` are intentionally omitted from the market list for now.
 - Example series values seen locally: `2nd Half Heroes`, `All-Star`, `Awards`, `Breakout`, `Contributor`, `Default`, `Egg Hunt`, `Last Ride`, `Live`, `New Threads`, `Postseason`, `Spotlight`, `Spring Breakout`, `St. Patrick's Day`, `Standout`, `Topps Now`, `Veteran`, `World Baseball Classic`.
 - Type changes clear `series`, because non-player types currently often return `series: Default`; a stale `series=Live` can make Equipment/Stadium/etc. look empty.
 - `App.tsx` also drops stale series params when the newly fetched result set does not contain that series.
@@ -290,7 +290,7 @@ Backend behavior
 Data and API notes
 - MLB item types used by the app: `mlb_card`, `stadium`, `equipment`, `sponsorship`, `unlockable`.
 - `/api/show/listings.json` proxies market listings and omits non-sellable catalog-only cards.
-- `/api/show/items.json` proxies the broader item catalog. Use it when a player-card series/checklist view needs to show every card, including non-sellable cards with no current market price.
+- `/api/show/items.json` proxies the broader item catalog. It remains available, but market list views should not use it to add catalog-only/non-sellable cards unless that product decision is explicitly revisited.
 - Non-player types can have different metadata fields than player cards. Use optional access patterns and shared helpers.
 - Equipment, Sponsorships, Stadiums, and Unlockables commonly have `series: Default`; this matters when thinking about series filters.
 - The frontend API client builds paths from `VITE_BACKEND_API_BASE`, `VITE_SHOW_API_BASE`, and `VITE_HISTORY_API_BASE` when present; otherwise it uses same-origin `/api/show` and `/api`.
