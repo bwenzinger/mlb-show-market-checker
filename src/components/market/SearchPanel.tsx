@@ -219,7 +219,7 @@ function StarFilterIcon({ filled }: { filled: boolean }) {
   );
 }
 
-export const SearchPanel = function SearchPanel({
+export function SearchPanel({
   listings,
   listingError,
   listingState,
@@ -272,20 +272,6 @@ export const SearchPanel = function SearchPanel({
     params?.minSellNow,
     params?.maxSellNow,
     params?.series,
-  ].filter(Boolean).length;
-  const activeAnyFilterCount = [
-    params?.query,
-    params?.itemType,
-    params?.rarity,
-    params?.minSpreadForPercent,
-    params?.minBuyNow,
-    params?.maxBuyNow,
-    params?.minSellNow,
-    params?.maxSellNow,
-    params?.profitHrActiveFlipSlots,
-    params?.profitHrStubBudget,
-    params?.series,
-    params?.starredOnly,
   ].filter(Boolean).length;
   const selectedSeriesValue =
     getMatchingSeriesOption(seriesOptions, params?.series) ??
@@ -905,4 +891,4 @@ export const SearchPanel = function SearchPanel({
       </Stack>
     </Paper>
   );
-};
+}

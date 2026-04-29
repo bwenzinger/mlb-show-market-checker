@@ -116,14 +116,6 @@ export default function App() {
     }),
     [params?.profitHrActiveFlipSlots, params?.profitHrStubBudget]
   );
-  // const initialFilters = useMemo(readFiltersFromUrl, []);
-  // const [query, setQuery] = useState(initialFilters.searchText);
-  // const [itemType, setItemType] = useState(initialFilters.itemType);
-  // const [rarity, setRarity] = useState(initialFilters.rarity);
-  // const [sort, setSort] = useState<SortKey>(initialFilters.sort);
-  // const [minSpreadForPercent, setMinSpreadForPercent] = useState(
-  //   params?.minSpreadForPercent
-  // );
   const [allListings, setAllListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [listingState, setListingState] = useState<LoadState>('idle');
@@ -132,26 +124,7 @@ export default function App() {
     () => getSeriesOptions(allListings),
     [allListings]
   );
-  // const [selectedUuid, setSelectedUuid] = useState<string | null>(
-  //   initialFilters.selectedUuid
-  // );
-  // const selectedUuidRef = useRef(selectedUuid);
   const previousFetchRef = useRef<Partial<FilterUrlParams> | null>(null);
-
-  // useEffect(() => {
-  //   selectedUuidRef.current = selectedUuid;
-  // }, [selectedUuid]);
-
-  // useEffect(() => {
-  //   writeFiltersToUrl({
-  //     itemType,
-  //     minSpreadForPercent,
-  //     rarity,
-  //     searchText: query.trim(),
-  //     selectedUuid,
-  //     sort,
-  //   });
-  // }, [itemType, minSpreadForPercent, query, rarity, selectedUuid, sort]);
 
   useEffect(() => {
     let active = true;
@@ -193,10 +166,10 @@ export default function App() {
           nextListings = fetchedListings.map((listing) => {
             const uuid = listing.item?.uuid;
             const average = uuid
-              ? storedOrderAverages.get(uuid)?.averagePrice ?? null
+              ? (storedOrderAverages.get(uuid)?.averagePrice ?? null)
               : null;
             const liquidity = uuid
-              ? storedOrderLiquidities.get(uuid) ?? null
+              ? (storedOrderLiquidities.get(uuid) ?? null)
               : null;
             const buyNow = getListingPrices(listing).buyNow;
 
