@@ -1928,7 +1928,7 @@ function readConfig(): CollectorConfig {
     apiBaseUrl: "https://mlb26.theshow.com/apis",
     concurrency: 4,
     dbPath: "market.sqlite",
-    host: "127.0.0.1",
+    host: "0.0.0.0",
     intervalMs: 60 * 60 * 1000,
     port: 4000,
     requestDelayMs: 150,

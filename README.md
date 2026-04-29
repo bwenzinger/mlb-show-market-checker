@@ -19,17 +19,8 @@ On the Linux machine:
 git clone <your-repo-url>
 cd mlb-show-market-checker
 npm install
-cp .env.example .env
 npm run build
 npm start
-```
-
-For public access, set this in `.env`:
-
-```bash
-MARKET_SERVER_HOST=0.0.0.0
-MARKET_SERVER_PORT=4000
-MARKET_DB_PATH=./market.sqlite
 ```
 
 The Node process will:
@@ -38,7 +29,7 @@ The Node process will:
 - proxy browser requests to the MLB The Show API through `/api/show`
 - expose stored completed orders through `/api/cards/:uuid/orders`
 - run the collector immediately, then once per hour by default
-- store market history in the SQLite file configured by `MARKET_DB_PATH`
+- store market history in `market.sqlite`
 
 For a real public site, put this behind a reverse proxy such as Caddy or Nginx and point your domain to the Linux machine. The app can also be exposed directly on port `4000` if your firewall and router allow it.
 
@@ -64,7 +55,6 @@ bash scripts/install-systemd-service.sh
 
 The installer will:
 
-- create `.env` from `.env.example` if it is missing
 - run `npm ci`
 - build the frontend with `npm run build`
 - install `/etc/systemd/system/mlb-show-market-checker.service`

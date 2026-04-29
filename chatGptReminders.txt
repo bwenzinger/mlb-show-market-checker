@@ -258,7 +258,7 @@ Backend behavior
 - This project is one app for one deployment situation. Avoid adding new `.env` configurability or alternate endpoint/base-URL switches unless the user explicitly asks for that specific deployment change. Prefer fixed project defaults over abstract configuration.
 - Default backend config:
   - API base: `https://mlb26.theshow.com/apis`
-  - host: `127.0.0.1`
+  - host: `0.0.0.0`
   - port: `4000`
   - DB path: `market.sqlite`
   - collector interval: 1 hour

@@ -18,11 +18,6 @@ if (( node_major < required_node_major )); then
   exit 1
 fi
 
-if [[ ! -f .env ]]; then
-  echo "Missing .env. Copy .env.example to .env and adjust the values for this machine." >&2
-  exit 1
-fi
-
 if [[ ! -x node_modules/.bin/tsx ]]; then
   echo "Missing node_modules/.bin/tsx. Run npm ci with Node ${required_node_major}+." >&2
   exit 1

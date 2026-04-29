@@ -28,11 +28,6 @@ if (( node_major < required_node_major )); then
   exit 1
 fi
 
-if [[ ! -f .env ]]; then
-  cp .env.example .env
-  echo "Created .env from .env.example. Review it after installation if you need different ports or paths."
-fi
-
 npm ci
 npm run build
 
