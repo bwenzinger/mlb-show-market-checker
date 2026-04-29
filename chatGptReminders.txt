@@ -78,6 +78,7 @@ List data flow
 - `starredOnly` is a local post-query filter using the user's locally starred UUID list; changing it or starring/unstarring an item should not refetch listings.
 - Series is still applied locally, and list views should currently include market listings only. Do not supplement player-card series/search results with `/items.json` catalog-only cards for now; cards not present in `/listings.json` should be omitted from the market list.
 - `App.tsx` stores the fetched/enriched list in `allListings`, applies post-query filters and sorting, then sets `filteredListings` for `SearchPanel`.
+- Listing fetches pass the active app sort to the backend as internal `app_sort` context while still requesting The Show listing pages with a supported API sort. The backend must not forward `app_sort` to The Show API.
 
 Search behavior
 - Market search should match more than player/listing names.
@@ -247,7 +248,7 @@ Cached liquidity source of truth
   - `/api/cards/liquidity`
 - Backend can also expose:
   - `/api/cards/:uuid/liquidity`
-- The `/api/show/listings.json` proxy refreshes cached liquidity rows for returned listings using current live listing prices before the frontend reads `/api/cards/liquidity`; this keeps list-level Profit/hr aligned with the same current-price bands users see after opening a detail row.
+- The `/api/show/listings.json` proxy refreshes cached liquidity rows for returned listings only when the app sort context is `profit_per_hour`. This uses current live listing prices before the frontend reads `/api/cards/liquidity`, keeping Profit/hr aligned with detail rows without slowing unrelated sorts such as Overall.
 - Collection and on-demand detail refresh should refresh cached liquidity for the affected UUID so the stored price bands stay aligned with current market prices.
 - Startup should warm `market_card_liquidity` once if the table is empty and local order history already exists.
 - Additive liquidity-cache schema changes may trigger a non-destructive refresh of cached liquidity rows so new recency fields are populated without clearing stored order history.

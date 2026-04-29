@@ -121,6 +121,12 @@ const LIQUIDITY_SHORT_WINDOW_MIN_MATCHES = 3;
 const LIQUIDITY_FULL_CONFIDENCE_MATCHES = 5;
 const LIQUIDITY_PRICE_BAND_MIN_STUBS = 50;
 const LIQUIDITY_PRICE_BAND_PERCENT = 0.02;
+const APP_SORT_QUERY_PARAM = "app_sort";
+const SHOW_LISTING_API_SORTS = new Set([
+  "best_buy_price",
+  "best_sell_price",
+  "rank",
+]);
 
 const config = readConfig();
 const db = new DatabaseSync(config.dbPath);
@@ -1057,18 +1063,32 @@ async function sendShowApiJson(
 
 async function sendShowListingsJson(req: Request, res: Response) {
   try {
+    const sortContext = getListingSortContext(req.query);
+    const showSearchParams = toShowSearchParams(req.query);
+    if (
+      typeof showSearchParams.sort === "string" &&
+      !isShowListingApiSort(showSearchParams.sort)
+    ) {
+      showSearchParams.sort = "rank";
+    }
+
     const json = await requestJson<ListingsResponse>(
       "/listings.json",
-      toShowSearchParams(req.query),
+      showSearchParams,
     );
 
-    try {
-      refreshCachedLiquidityForListings(json.listings ?? [], new Date().toISOString());
-    } catch (error) {
-      console.error(
-        "Failed to refresh listing-page liquidity:",
-        error instanceof Error ? error.message : String(error),
-      );
+    if (shouldRefreshListingPageLiquidity(sortContext)) {
+      try {
+        refreshCachedLiquidityForListings(
+          json.listings ?? [],
+          new Date().toISOString(),
+        );
+      } catch (error) {
+        console.error(
+          "Failed to refresh listing-page liquidity:",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
     }
 
     res.json(json);
@@ -1116,6 +1136,8 @@ function toShowSearchParams(
   const params: Record<string, string | number | undefined> = {};
 
   for (const [key, rawValue] of Object.entries(query)) {
+    if (key === APP_SORT_QUERY_PARAM) continue;
+
     const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
     if (typeof value === "string" && value.length > 0) {
       params[key] = value;
@@ -1123,6 +1145,31 @@ function toShowSearchParams(
   }
 
   return params;
+}
+
+function getListingSortContext(query: Request["query"]): string | undefined {
+  return (
+    getQueryStringValue(query, APP_SORT_QUERY_PARAM) ??
+    getQueryStringValue(query, "sort")
+  );
+}
+
+function getQueryStringValue(
+  query: Request["query"],
+  key: string,
+): string | undefined {
+  const rawValue = query[key];
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function isShowListingApiSort(value: string): boolean {
+  return SHOW_LISTING_API_SORTS.has(value);
+}
+
+function shouldRefreshListingPageLiquidity(sort: string | undefined): boolean {
+  return sort === "profit_per_hour";
 }
 
 function isAllowedOrigin(origin: string): boolean {

@@ -122,6 +122,7 @@ const SHOW_API_BASE = '/api/show';
 const HISTORY_API_BASE = '/api';
 
 export async function fetchListings({
+  appSort,
   page = 1,
   name,
   rarity,
@@ -129,6 +130,7 @@ export async function fetchListings({
   order = 'desc',
   type = 'mlb_card',
 }: {
+  appSort?: SortKey;
   page?: number;
   name?: string;
   rarity?: string;
@@ -142,6 +144,7 @@ export async function fetchListings({
     name,
     rarity,
     sort,
+    app_sort: appSort,
     order,
   });
 }

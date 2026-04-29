@@ -362,16 +362,19 @@ export function writeFiltersToUrl({
 }
 
 export async function fetchListingsByTypeAndRarity({
+  appSort,
   itemType,
   name,
   rarity,
 }: {
+  appSort?: SortKey;
   itemType?: ItemType | '';
   name?: string;
   rarity?: string;
 }): Promise<Listing[]> {
   const normalizedName = normalizeSearchText(name ?? '');
   const marketListings = await fetchAllListings({
+    appSort,
     itemType,
     rarity,
   });
@@ -1178,9 +1181,11 @@ function listingStandardSortValue(
 }
 
 async function fetchAllListings({
+  appSort,
   itemType,
   rarity,
 }: {
+  appSort?: SortKey;
   itemType?: ItemType | '';
   rarity?: string;
 } = {}): Promise<Listing[]> {
@@ -1190,6 +1195,7 @@ async function fetchAllListings({
     listingTypes.length,
     (type) =>
       fetchAllListingsForType(type, {
+        appSort,
         rarity,
       })
   );
@@ -1200,12 +1206,15 @@ async function fetchAllListings({
 async function fetchAllListingsForType(
   type: (typeof MARKET_ITEM_TYPES)[number],
   {
+    appSort,
     rarity,
   }: {
+    appSort?: SortKey;
     rarity?: string;
   } = {}
 ): Promise<Listing[]> {
   const firstResponse = await fetchListings({
+    appSort,
     page: 1,
     rarity,
     sort: 'rank',
@@ -1227,6 +1236,7 @@ async function fetchAllListingsForType(
     6,
     async (page) => {
       const response = await fetchListings({
+        appSort,
         page,
         rarity,
         sort: 'rank',

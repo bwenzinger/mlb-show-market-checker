@@ -148,6 +148,7 @@ export default function App() {
 
         if (needsNewFetch) {
           const fetchedListings = await fetchListingsByTypeAndRarity({
+            appSort: activeSort,
             itemType: params?.itemType,
             name: params?.query ? params.query.trim() : undefined,
             rarity: params?.rarity || undefined,
