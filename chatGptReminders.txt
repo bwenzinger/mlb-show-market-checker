@@ -294,7 +294,6 @@ Data and API notes
 - Non-player types can have different metadata fields than player cards. Use optional access patterns and shared helpers.
 - Equipment, Sponsorships, Stadiums, and Unlockables commonly have `series: Default`; this matters when thinking about series filters.
 - The frontend API client builds paths from `VITE_BACKEND_API_BASE`, `VITE_SHOW_API_BASE`, and `VITE_HISTORY_API_BASE` when present; otherwise it uses same-origin `/api/show` and `/api`.
-- `VITE_HISTORY_API_ENABLED=false` disables local history fetches and returns empty history/average data.
 - Frontend API helpers should not cache market data in memory or local storage unless a future product decision explicitly reintroduces caching with freshness controls.
 - Local storage is acceptable for user preferences such as starred listing UUIDs. Do not store market price/listing/order payloads there under the current no-frontend-market-cache rule.
 

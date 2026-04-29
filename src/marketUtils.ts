@@ -367,11 +367,8 @@ export async function fetchListingsByTypeAndRarity({
   rarity,
 }: {
   itemType?: ItemType | '';
-  minSpreadForPercent?: number;
   name?: string;
   rarity?: string;
-  series?: string;
-  sort?: SortKey;
 }): Promise<Listing[]> {
   const normalizedName = normalizeSearchText(name ?? '');
   const marketListings = await fetchAllListings({

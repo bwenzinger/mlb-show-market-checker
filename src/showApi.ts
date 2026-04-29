@@ -1,28 +1,28 @@
 export type ItemType =
-  | "mlb_card"
-  | "stadium"
-  | "equipment"
-  | "sponsorship"
-  | "unlockable";
+  | 'mlb_card'
+  | 'stadium'
+  | 'equipment'
+  | 'sponsorship'
+  | 'unlockable';
 
 export const MARKET_ITEM_TYPES: ItemType[] = [
-  "mlb_card",
-  "stadium",
-  "equipment",
-  "sponsorship",
-  "unlockable",
+  'mlb_card',
+  'stadium',
+  'equipment',
+  'sponsorship',
+  'unlockable',
 ];
 
-export type ApiSortKey = "rank" | "best_sell_price" | "best_buy_price";
+export type ApiSortKey = 'rank' | 'best_sell_price' | 'best_buy_price';
 export type SortKey =
   | ApiSortKey
-  | "buy_now_vs_all_time_average_diff"
-  | "profit_per_hour"
-  | "spread_number"
-  | "spread_percentage"
-  | "profit"
-  | "profit_percentage";
-export type SortOrder = "asc" | "desc";
+  | 'buy_now_vs_all_time_average_diff'
+  | 'profit_per_hour'
+  | 'spread_number'
+  | 'spread_percentage'
+  | 'profit'
+  | 'profit_percentage';
+export type SortOrder = 'asc' | 'desc';
 
 export interface ShowItem {
   uuid: string;
@@ -125,21 +125,18 @@ const API_BASE =
   import.meta.env.VITE_SHOW_API_BASE ??
   (BACKEND_API_BASE
     ? `${trimTrailingSlash(BACKEND_API_BASE)}/api/show`
-    : "/api/show");
+    : '/api/show');
 const HISTORY_API_BASE =
   import.meta.env.VITE_HISTORY_API_BASE ??
-  (BACKEND_API_BASE
-    ? `${trimTrailingSlash(BACKEND_API_BASE)}/api`
-    : "/api");
-const HISTORY_API_ENABLED = import.meta.env.VITE_HISTORY_API_ENABLED !== "false";
+  (BACKEND_API_BASE ? `${trimTrailingSlash(BACKEND_API_BASE)}/api` : '/api');
 
 export async function fetchListings({
   page = 1,
   name,
   rarity,
-  sort = "rank",
-  order = "desc",
-  type = "mlb_card",
+  sort = 'rank',
+  order = 'desc',
+  type = 'mlb_card',
 }: {
   page?: number;
   name?: string;
@@ -148,7 +145,7 @@ export async function fetchListings({
   order?: SortOrder;
   type?: ItemType;
 } = {}): Promise<ListingsResponse> {
-  return requestJson<ListingsResponse>("/listings.json", {
+  return requestJson<ListingsResponse>('/listings.json', {
     type,
     page,
     name,
@@ -160,12 +157,12 @@ export async function fetchListings({
 
 export async function fetchItems({
   page = 1,
-  type = "mlb_card",
+  type = 'mlb_card',
 }: {
   page?: number;
   type?: ItemType;
 } = {}): Promise<ItemsResponse> {
-  return requestJson<ItemsResponse>("/items.json", {
+  return requestJson<ItemsResponse>('/items.json', {
     type,
     page,
   });
@@ -175,7 +172,7 @@ export async function fetchListingByUuid(
   uuid: string,
   options: RequestOptions = {}
 ): Promise<Listing> {
-  return requestJson<Listing>("/listing.json", { uuid }, options);
+  return requestJson<Listing>('/listing.json', { uuid }, options);
 }
 
 export async function fetchStoredCompletedOrders({
@@ -187,21 +184,17 @@ export async function fetchStoredCompletedOrders({
   signal?: AbortSignal;
   uuid: string;
 }): Promise<CompletedOrder[]> {
-  if (!HISTORY_API_ENABLED) {
-    return [];
-  }
-
   const url = new URL(
     `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
-      uuid,
+      uuid
     )}/orders`,
-    window.location.href,
+    window.location.href
   );
-  url.searchParams.set("days", String(days));
+  url.searchParams.set('days', String(days));
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/json",
+      Accept: 'application/json',
     },
   });
 
@@ -216,10 +209,6 @@ export async function fetchStoredCompletedOrders({
 export async function fetchStoredOrderAverages(): Promise<
   Map<string, StoredOrderAverage>
 > {
-  if (!HISTORY_API_ENABLED) {
-    return new Map();
-  }
-
   const url = new URL(
     `${trimTrailingSlash(HISTORY_API_BASE)}/cards/averages`,
     window.location.href
@@ -227,7 +216,7 @@ export async function fetchStoredOrderAverages(): Promise<
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/json",
+      Accept: 'application/json',
     },
   });
 
@@ -247,10 +236,6 @@ export async function fetchStoredOrderAverages(): Promise<
 export async function fetchStoredOrderLiquidities(): Promise<
   Map<string, StoredOrderLiquidity>
 > {
-  if (!HISTORY_API_ENABLED) {
-    return new Map();
-  }
-
   const url = new URL(
     `${trimTrailingSlash(HISTORY_API_BASE)}/cards/liquidity`,
     window.location.href
@@ -258,7 +243,7 @@ export async function fetchStoredOrderLiquidities(): Promise<
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/json",
+      Accept: 'application/json',
     },
   });
 
@@ -280,10 +265,6 @@ export async function fetchStoredOrderLiquidity({
   signal?: AbortSignal;
   uuid: string;
 }): Promise<StoredOrderLiquidity | null> {
-  if (!HISTORY_API_ENABLED) {
-    return null;
-  }
-
   const url = new URL(
     `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
       uuid
@@ -293,7 +274,7 @@ export async function fetchStoredOrderLiquidity({
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/json",
+      Accept: 'application/json',
     },
     signal,
   });
@@ -316,10 +297,6 @@ export async function fetchStoredOrderAverage({
   signal?: AbortSignal;
   uuid: string;
 }): Promise<StoredOrderAverage | null> {
-  if (!HISTORY_API_ENABLED) {
-    return null;
-  }
-
   const url = new URL(
     `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
       uuid
@@ -329,7 +306,7 @@ export async function fetchStoredOrderAverage({
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/json",
+      Accept: 'application/json',
     },
     signal,
   });
@@ -348,19 +325,22 @@ export async function fetchStoredOrderAverage({
 async function requestJson<T>(
   path: string,
   searchParams: Record<string, string | number | undefined> = {},
-  options: RequestOptions = {},
+  options: RequestOptions = {}
 ): Promise<T> {
-  const url = new URL(`${trimTrailingSlash(API_BASE)}${path}`, window.location.href);
+  const url = new URL(
+    `${trimTrailingSlash(API_BASE)}${path}`,
+    window.location.href
+  );
 
   for (const [key, value] of Object.entries(searchParams)) {
-    if (value !== undefined && value !== "") {
+    if (value !== undefined && value !== '') {
       url.searchParams.set(key, String(value));
     }
   }
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/json",
+      Accept: 'application/json',
     },
     signal: options.signal,
   });
@@ -373,5 +353,5 @@ async function requestJson<T>(
 }
 
 function trimTrailingSlash(value: string): string {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
+  return value.endsWith('/') ? value.slice(0, -1) : value;
 }

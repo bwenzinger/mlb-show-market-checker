@@ -137,8 +137,7 @@ export default function App() {
         previousFetch === null ||
         previousFetch.itemType !== params.itemType ||
         previousFetch.query !== params.query ||
-        previousFetch.rarity !== params.rarity ||
-        previousFetch.series !== params.series;
+        previousFetch.rarity !== params.rarity;
 
       setListingState((current) =>
         current === 'ready' && !needsNewFetch ? 'ready' : 'loading'
@@ -152,7 +151,6 @@ export default function App() {
             itemType: params?.itemType,
             name: params?.query ? params.query.trim() : undefined,
             rarity: params?.rarity || undefined,
-            series: params?.series,
           });
 
           const [storedOrderAverages, storedOrderLiquidities] =
