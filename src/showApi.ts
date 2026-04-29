@@ -118,17 +118,8 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
-const BACKEND_API_BASE = import.meta.env.VITE_BACKEND_API_BASE as
-  | string
-  | undefined;
-const API_BASE =
-  import.meta.env.VITE_SHOW_API_BASE ??
-  (BACKEND_API_BASE
-    ? `${trimTrailingSlash(BACKEND_API_BASE)}/api/show`
-    : '/api/show');
-const HISTORY_API_BASE =
-  import.meta.env.VITE_HISTORY_API_BASE ??
-  (BACKEND_API_BASE ? `${trimTrailingSlash(BACKEND_API_BASE)}/api` : '/api');
+const SHOW_API_BASE = '/api/show';
+const HISTORY_API_BASE = '/api';
 
 export async function fetchListings({
   page = 1,
@@ -185,9 +176,7 @@ export async function fetchStoredCompletedOrders({
   uuid: string;
 }): Promise<CompletedOrder[]> {
   const url = new URL(
-    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
-      uuid
-    )}/orders`,
+    `${HISTORY_API_BASE}/cards/${encodeURIComponent(uuid)}/orders`,
     window.location.href
   );
   url.searchParams.set('days', String(days));
@@ -196,6 +185,7 @@ export async function fetchStoredCompletedOrders({
     headers: {
       Accept: 'application/json',
     },
+    signal,
   });
 
   if (!response.ok) {
@@ -209,10 +199,7 @@ export async function fetchStoredCompletedOrders({
 export async function fetchStoredOrderAverages(): Promise<
   Map<string, StoredOrderAverage>
 > {
-  const url = new URL(
-    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/averages`,
-    window.location.href
-  );
+  const url = new URL(`${HISTORY_API_BASE}/cards/averages`, window.location.href);
 
   const response = await fetch(url, {
     headers: {
@@ -237,7 +224,7 @@ export async function fetchStoredOrderLiquidities(): Promise<
   Map<string, StoredOrderLiquidity>
 > {
   const url = new URL(
-    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/liquidity`,
+    `${HISTORY_API_BASE}/cards/liquidity`,
     window.location.href
   );
 
@@ -266,9 +253,7 @@ export async function fetchStoredOrderLiquidity({
   uuid: string;
 }): Promise<StoredOrderLiquidity | null> {
   const url = new URL(
-    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
-      uuid
-    )}/liquidity`,
+    `${HISTORY_API_BASE}/cards/${encodeURIComponent(uuid)}/liquidity`,
     window.location.href
   );
 
@@ -298,9 +283,7 @@ export async function fetchStoredOrderAverage({
   uuid: string;
 }): Promise<StoredOrderAverage | null> {
   const url = new URL(
-    `${trimTrailingSlash(HISTORY_API_BASE)}/cards/${encodeURIComponent(
-      uuid
-    )}/average`,
+    `${HISTORY_API_BASE}/cards/${encodeURIComponent(uuid)}/average`,
     window.location.href
   );
 
@@ -328,7 +311,7 @@ async function requestJson<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const url = new URL(
-    `${trimTrailingSlash(API_BASE)}${path}`,
+    `${SHOW_API_BASE}${path}`,
     window.location.href
   );
 
@@ -350,8 +333,4 @@ async function requestJson<T>(
   }
 
   return (await response.json()) as T;
-}
-
-function trimTrailingSlash(value: string): string {
-  return value.endsWith('/') ? value.slice(0, -1) : value;
 }

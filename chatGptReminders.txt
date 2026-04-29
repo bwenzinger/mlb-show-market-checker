@@ -253,7 +253,8 @@ Cached liquidity source of truth
 - Additive liquidity-cache schema changes may trigger a non-destructive refresh of cached liquidity rows so new recency fields are populated without clearing stored order history.
 
 Backend behavior
-- `src/server/marketServer.ts` loads `.env` if present and reads config through `readConfig`.
+- `src/server/marketServer.ts` uses fixed project defaults from `readConfig`; it should not load `.env` or vary API bases, endpoints, paths, timing, CORS, host, or port from environment variables.
+- This project is one app for one deployment situation. Avoid adding new `.env` configurability or alternate endpoint/base-URL switches unless the user explicitly asks for that specific deployment change. Prefer fixed project defaults over abstract configuration.
 - Default backend config:
   - API base: `https://mlb26.theshow.com/apis`
   - host: `127.0.0.1`
@@ -283,7 +284,7 @@ Backend behavior
   - `GET /api/cards/:uuid/average`: one cached average row.
   - `POST /api/collect`: trigger collection.
 - The backend serves the built frontend from `dist/` when available; otherwise API-only mode is active.
-- CORS defaults to `*` unless `CORS_ORIGINS` is configured.
+- CORS is fixed to `*` for this single deployment setup.
 - The collector fetches all market listings across all item types, persists cards, fetches each listing detail, stores completed orders, and updates cached averages.
 - `collectionInFlight` prevents overlapping collection work.
 
@@ -293,7 +294,7 @@ Data and API notes
 - `/api/show/items.json` proxies the broader item catalog. It remains available, but market list views should not use it to add catalog-only/non-sellable cards unless that product decision is explicitly revisited.
 - Non-player types can have different metadata fields than player cards. Use optional access patterns and shared helpers.
 - Equipment, Sponsorships, Stadiums, and Unlockables commonly have `series: Default`; this matters when thinking about series filters.
-- The frontend API client builds paths from `VITE_BACKEND_API_BASE`, `VITE_SHOW_API_BASE`, and `VITE_HISTORY_API_BASE` when present; otherwise it uses same-origin `/api/show` and `/api`.
+- The frontend API client always uses same-origin `/api/show` for proxied Show API calls and same-origin `/api` for local history/cache endpoints. Do not add Vite env vars for alternate frontend API bases.
 - Frontend API helpers should not cache market data in memory or local storage unless a future product decision explicitly reintroduces caching with freshness controls.
 - Local storage is acceptable for user preferences such as starred listing UUIDs. Do not store market price/listing/order payloads there under the current no-frontend-market-cache rule.
 

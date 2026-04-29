@@ -122,10 +122,6 @@ const LIQUIDITY_FULL_CONFIDENCE_MATCHES = 5;
 const LIQUIDITY_PRICE_BAND_MIN_STUBS = 50;
 const LIQUIDITY_PRICE_BAND_PERCENT = 0.02;
 
-if (fs.existsSync(".env")) {
-  process.loadEnvFile(".env");
-}
-
 const config = readConfig();
 const db = new DatabaseSync(config.dbPath);
 
@@ -1881,16 +1877,15 @@ function countTable(tableName: string): number {
 
 function readConfig(): CollectorConfig {
   return {
-    allowedOrigins: readList("CORS_ORIGINS", ["*"]),
-    apiBaseUrl:
-      process.env.SHOW_API_BASE_URL ?? "https://mlb26.theshow.com/apis",
-    concurrency: readInt("COLLECTOR_CONCURRENCY", 4),
-    dbPath: process.env.MARKET_DB_PATH ?? "market.sqlite",
-    host: process.env.MARKET_SERVER_HOST ?? "127.0.0.1",
-    intervalMs: readInt("COLLECTOR_INTERVAL_MS", 60 * 60 * 1000),
-    port: readInt("MARKET_SERVER_PORT", 4000),
-    requestDelayMs: readInt("REQUEST_DELAY_MS", 150),
-    staticDir: process.env.STATIC_DIR ?? path.resolve(process.cwd(), "dist"),
+    allowedOrigins: ["*"],
+    apiBaseUrl: "https://mlb26.theshow.com/apis",
+    concurrency: 4,
+    dbPath: "market.sqlite",
+    host: "127.0.0.1",
+    intervalMs: 60 * 60 * 1000,
+    port: 4000,
+    requestDelayMs: 150,
+    staticDir: path.resolve(process.cwd(), "dist"),
   };
 }
 
@@ -1927,22 +1922,6 @@ function clampInt(
   const parsed = Number(raw);
   const int = Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
   return Math.min(Math.max(int, min), max);
-}
-
-function readInt(name: string, fallback: number): number {
-  const value = process.env[name];
-  if (value === undefined || value === "") return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
-}
-
-function readList(name: string, fallback: string[]): string[] {
-  const value = process.env[name];
-  if (value === undefined || value.trim() === "") return fallback;
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
 }
 
 function normalizeOrderTime(value: string | null): string | null {
