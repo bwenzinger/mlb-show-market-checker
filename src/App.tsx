@@ -296,7 +296,6 @@ export default function App() {
 
   return (
     <Container maxWidth={false} sx={{ maxWidth: 1440, py: 3 }}>
-      test
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={2}
