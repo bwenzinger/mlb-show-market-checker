@@ -78,18 +78,14 @@ function parsePositiveQueryInteger(
   return Math.trunc(parsed);
 }
 
-function toPositiveQueryValue(
-  value: string,
-  defaultValue: number
-): string | undefined {
+function toPositiveQueryValue(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
 
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
 
-  const normalized = String(Math.max(Math.trunc(parsed), 1));
-  return normalized === String(defaultValue) ? undefined : normalized;
+  return String(Math.max(Math.trunc(parsed), 1));
 }
 
 function getMatchingSeriesOption(options: string[], value: string | undefined) {
@@ -558,35 +554,33 @@ export function SearchPanel({
               },
             }}
           >
-            <TextField
+            <DebounceTextField
+              debounceMs={300}
               fullWidth
               inputProps={{ min: 1, step: 1000 }}
               label="Stub budget"
-              onChange={(event) =>
+              onDebouncedChange={(value) =>
                 setQueryParams({
-                  profitHrStubBudget: toPositiveQueryValue(
-                    event.target.value,
-                    DEFAULT_PROFIT_PER_HOUR_STUB_BUDGET
-                  ),
+                  profitHrStubBudget: toPositiveQueryValue(value),
                 })
               }
+              placeholder={String(DEFAULT_PROFIT_PER_HOUR_STUB_BUDGET)}
               type="number"
-              value={String(profitHrStubBudget)}
+              value={params?.profitHrStubBudget ?? ''}
             />
-            <TextField
+            <DebounceTextField
+              debounceMs={300}
               fullWidth
               inputProps={{ min: 1, step: 1 }}
               label="Flip slots"
-              onChange={(event) =>
+              onDebouncedChange={(value) =>
                 setQueryParams({
-                  profitHrActiveFlipSlots: toPositiveQueryValue(
-                    event.target.value,
-                    DEFAULT_PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS
-                  ),
+                  profitHrActiveFlipSlots: toPositiveQueryValue(value),
                 })
               }
+              placeholder={String(DEFAULT_PROFIT_PER_HOUR_ACTIVE_FLIP_SLOTS)}
               type="number"
-              value={String(profitHrActiveFlipSlots)}
+              value={params?.profitHrActiveFlipSlots ?? ''}
             />
           </Box>
         ) : null}

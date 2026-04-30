@@ -192,6 +192,7 @@ SearchPanel UX
 - The minimum spread field is only visible when sort is `Spread %`.
 - Profit/hr tuning fields (`Stub budget`, `Flip slots`) are only visible when sort is `Profit/hr`, positioned above the `Filters` button, and should update the list sort plus row metric without refetching listings.
 - When sort is `Profit/hr`, each list row metric shows both the liquidity-adjusted Profit/hr value and the current profit per flip (`N/flip`) based on actual live market buy/sell prices, not quick-sell fallback.
+- Profit/hr input defaults should be calculation fallbacks/placeholders only. Use debounced text fields for these controls; do not force default values into the text fields while the user is editing, and clearing an input must leave it visually empty.
 - Star controls are local user preferences stored on the user's device, not market data caches. List rows and the selected detail header have star icon buttons. The visible `Starred only` toggle sits next to the `Filters` button and filters the current fetched list by starred UUIDs.
 - Post-query filters live behind a `Filters` button in a right-side drawer:
   - series
