@@ -6,6 +6,7 @@ import { SearchPanel } from './components/market/SearchPanel';
 import {
   type LoadState,
   fetchListingsByTypeAndRarity,
+  filterListingsBySearch,
   getDefaultSortDirection,
   isSpreadSort,
   sortListingsBySpread,
@@ -136,7 +137,6 @@ export default function App() {
       const needsNewFetch =
         previousFetch === null ||
         previousFetch.itemType !== params.itemType ||
-        previousFetch.query !== params.query ||
         previousFetch.rarity !== params.rarity;
 
       setListingState((current) =>
@@ -150,7 +150,6 @@ export default function App() {
           const fetchedListings = await fetchListingsByTypeAndRarity({
             appSort: activeSort,
             itemType: params?.itemType,
-            name: params?.query ? params.query.trim() : undefined,
             rarity: params?.rarity || undefined,
           });
 
@@ -188,9 +187,7 @@ export default function App() {
           setAllListings(nextListings);
           previousFetchRef.current = {
             itemType: params?.itemType,
-            query: params?.query,
             rarity: params?.rarity,
-            series: params?.series,
           };
         }
 
@@ -207,7 +204,10 @@ export default function App() {
           setQueryParams({ series: undefined });
         }
 
-        nextListings = nextListings.filter((listing) => {
+        nextListings = filterListingsBySearch(
+          nextListings,
+          params?.query
+        ).filter((listing) => {
           const prices = getListingPrices(listing);
           const uuid = listing.item?.uuid;
 

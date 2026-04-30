@@ -67,14 +67,14 @@ URL state and query params
 
 List data flow
 - On first load, even with an empty URL, `App.tsx` must fetch listing data. Do not regress this; the previous failure mode was an empty initial list because "previous fetch" and current params were all undefined.
-- `App.tsx` decides whether to fetch new list data by comparing `itemType`, `query`, `rarity`, and `series` against the previous fetch key.
+- `App.tsx` decides whether to fetch new list data by comparing `itemType` and `rarity` against the previous fetch key.
 - Do not add frontend market-data caching for now. Frontend requests should fetch fresh data when the app workflow asks for data, because flipping-card numbers move rapidly and a 5-minute frontend cache can make the displayed opportunity data pointless. This may change in the future, but frontend caching has already been intentionally removed once.
 - `itemType` and `rarity` reduce API work:
   - If `itemType` is selected, only that type is fetched.
   - If `itemType` is empty, all market item types are fetched.
   - `rarity` is passed to the listing API calls.
-- Search text currently participates in the fetch key, then matching is applied locally after fetched listing pages are loaded.
-- Post-query filters (`series`, min/max buy/sell, and spread minimum) should reuse the current fetched listing array for normal filtering work.
+- Search text is a local post-fetch filter. Typing in the search box must reuse the current fetched listing array and must not refetch listing pages.
+- Post-query filters (`query`, `series`, min/max buy/sell, and spread minimum) should reuse the current fetched listing array for normal filtering work.
 - `starredOnly` is a local post-query filter using the user's locally starred UUID list; changing it or starring/unstarring an item should not refetch listings.
 - Series is still applied locally, and list views should currently include market listings only. Do not supplement player-card series/search results with `/items.json` catalog-only cards for now; cards not present in `/listings.json` should be omitted from the market list.
 - `App.tsx` stores the fetched/enriched list in `allListings`, applies post-query filters and sorting, then sets `filteredListings` for `SearchPanel`.
@@ -199,7 +199,7 @@ SearchPanel UX
   - min/max buy now
   - min/max sell now
 - The `Filters` button shows the active post-query filter count in a small MUI badge.
-- `Clear all` is on the main SearchPanel row, not hidden inside the drawer. It clears pre-query filters (`query`, `itemType`, `rarity`) and post-query filters (`series`, min/max buy/sell, minimum spread). It does not change sort settings directly.
+- `Clear all` is on the main SearchPanel row, not hidden inside the drawer. It clears fetch-scope filters (`itemType`, `rarity`) and post-query filters (`query`, `series`, min/max buy/sell, minimum spread). It does not change sort settings directly.
 - The virtualized list uses a local scroll container, fixed row height, and overscan.
 - The list does not auto-scroll to the selected item.
 - Search/filter/sort changes reset the list scroll position to the top.

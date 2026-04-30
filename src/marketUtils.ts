@@ -364,15 +364,12 @@ export function writeFiltersToUrl({
 export async function fetchListingsByTypeAndRarity({
   appSort,
   itemType,
-  name,
   rarity,
 }: {
   appSort?: SortKey;
   itemType?: ItemType | '';
-  name?: string;
   rarity?: string;
 }): Promise<Listing[]> {
-  const normalizedName = normalizeSearchText(name ?? '');
   const marketListings = await fetchAllListings({
     appSort,
     itemType,
@@ -381,12 +378,22 @@ export async function fetchListingsByTypeAndRarity({
   const matchingListings = marketListings.filter(
     (listing) =>
       listingMatchesItemType(listing, itemType) &&
-      listingMatchesRarity(listing, rarity) &&
-      (!normalizedName ||
-        listingMatchesNormalizedSearch(listing, normalizedName))
+      listingMatchesRarity(listing, rarity)
   );
 
   return matchingListings;
+}
+
+export function filterListingsBySearch(
+  listings: Listing[],
+  searchText: string | undefined
+): Listing[] {
+  const normalizedName = normalizeSearchText(searchText ?? '');
+  if (!normalizedName) return listings;
+
+  return listings.filter((listing) =>
+    listingMatchesNormalizedSearch(listing, normalizedName)
+  );
 }
 
 export function isSpreadSort(
