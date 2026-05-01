@@ -1,20 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Box,
-  Chip,
-  Paper,
-  Skeleton,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TablePagination,
-  TableRow,
-  Typography,
-} from '@mui/material';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   ALL_ORDER_LOOKBACK_DAYS,
@@ -22,9 +6,6 @@ import {
   calculateProfit,
   calculateProfitPercentage,
   formatPerHour,
-  formatStubs,
-  getListingDetailSummary,
-  getListingEyebrow,
   getListingProfitPerHour,
   getListingPrices,
   isUsingQuickSellFallback,
@@ -32,9 +13,6 @@ import {
   normalizePriceHistory,
   RECENT_ORDER_LOOKBACK_DAYS,
   type LoadState,
-  type OrderBucket,
-  type OrderPoint,
-  type PricePoint,
   type ProfitPerHourOptions,
 } from '../../../marketUtils';
 import {
@@ -46,16 +24,6 @@ import {
   type Listing,
   type StoredOrderAverage,
 } from '../../../showApi';
-import { CompletedOrderTimelineChart, OrderChart, PriceChart } from '../Charts';
-import {
-  ChartCard,
-  MetricCard,
-  ProfitMetric,
-  QuickSellBadge,
-  SectionHeading,
-} from '../common';
-import { AllCompletedOrdersChartSection } from './AllCompletedOrdersSection';
-import { AllCompletedOrdersTableSection } from './AllCompletedOrdersTableSection';
 import { MarketDetailView } from './MarketDetailView';
 import { useQueryParams } from '../common/useQueryParams';
 import { useStarredListings } from '../common/useStarredListings';
@@ -72,7 +40,11 @@ function parsePositiveQueryInteger(
   return Math.trunc(parsed);
 }
 
-const ALL_ORDERS_LOAD_DELAY_MS = 250;
+interface AllOrdersRequest {
+  requestId: number;
+  refreshKey: number;
+  uuid: string;
+}
 
 export function MarketDetail() {
   const { params, setQueryParams } = useQueryParams<FilterUrlParams>();
@@ -96,6 +68,8 @@ export function MarketDetail() {
   const [completedOrderPage, setCompletedOrderPage] = useState(0);
   const [completedOrderRowsPerPage, setCompletedOrderRowsPerPage] =
     useState(25);
+  const [allOrdersRequest, setAllOrdersRequest] =
+    useState<AllOrdersRequest | null>(null);
   const profitPerHourOptions: ProfitPerHourOptions = useMemo(
     () => ({
       activeFlipSlots: parsePositiveQueryInteger(
@@ -116,6 +90,7 @@ export function MarketDetail() {
       setStoredCompletedOrders(null);
       setStoredAllCompletedOrders(null);
       setStoredOrderAverage(null);
+      setAllOrdersRequest(null);
       setDetailState('idle');
       setDetailError('');
       setRecentOrdersState('idle');
@@ -128,12 +103,12 @@ export function MarketDetail() {
     let active = true;
     const abortController = new AbortController();
     const { signal } = abortController;
-    let allOrdersTimeoutId: number | null = null;
 
     setSelectedListing(null);
     setStoredCompletedOrders(null);
     setStoredAllCompletedOrders(null);
     setStoredOrderAverage(null);
+    setAllOrdersRequest(null);
     setDetailState('loading');
     setDetailError('');
     setRecentOrdersState('idle');
@@ -165,35 +140,6 @@ export function MarketDetail() {
         setStoredCompletedOrders(null);
         setRecentOrdersState('error');
         setRecentOrdersError(
-          error instanceof Error ? error.message : String(error)
-        );
-      }
-    }
-
-    async function loadAllOrders() {
-      setAllOrdersState('loading');
-      setAllOrdersError('');
-
-      if (!params?.uuid) {
-        return;
-      }
-
-      try {
-        const allOrders = await fetchStoredCompletedOrders({
-          days: ALL_ORDER_LOOKBACK_DAYS,
-          signal,
-          uuid: params?.uuid,
-        });
-        if (!active || signal.aborted) return;
-
-        setStoredAllCompletedOrders(allOrders.length > 0 ? allOrders : null);
-        setAllOrdersState('ready');
-      } catch (error) {
-        if (!active || signal.aborted) return;
-
-        setStoredAllCompletedOrders(null);
-        setAllOrdersState('error');
-        setAllOrdersError(
           error instanceof Error ? error.message : String(error)
         );
       }
@@ -240,10 +186,6 @@ export function MarketDetail() {
         setDetailState('ready');
         void loadAverage();
         void loadRecentOrders();
-        allOrdersTimeoutId = window.setTimeout(() => {
-          if (!active || signal.aborted) return;
-          void loadAllOrders();
-        }, ALL_ORDERS_LOAD_DELAY_MS);
       } catch (error) {
         if (!active || signal.aborted) return;
 
@@ -257,11 +199,60 @@ export function MarketDetail() {
     return () => {
       active = false;
       abortController.abort();
-      if (allOrdersTimeoutId !== null) {
-        window.clearTimeout(allOrdersTimeoutId);
-      }
     };
   }, [params?.uuid, refreshKey]);
+
+  useEffect(() => {
+    if (
+      !params?.uuid ||
+      allOrdersRequest === null ||
+      allOrdersRequest.uuid !== params.uuid ||
+      allOrdersRequest.refreshKey !== refreshKey
+    ) {
+      return;
+    }
+
+    let active = true;
+    const abortController = new AbortController();
+    const { signal } = abortController;
+
+    setStoredAllCompletedOrders(null);
+    setAllOrdersState('loading');
+    setAllOrdersError('');
+
+    async function loadAllOrders() {
+      if (!params?.uuid) {
+        return;
+      }
+
+      try {
+        const allOrders = await fetchStoredCompletedOrders({
+          days: ALL_ORDER_LOOKBACK_DAYS,
+          signal,
+          uuid: params.uuid,
+        });
+        if (!active || signal.aborted) return;
+
+        setStoredAllCompletedOrders(allOrders.length > 0 ? allOrders : null);
+        setAllOrdersState('ready');
+      } catch (error) {
+        if (!active || signal.aborted) return;
+
+        setStoredAllCompletedOrders(null);
+        setAllOrdersState('error');
+        setAllOrdersError(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
+
+    void loadAllOrders();
+
+    return () => {
+      active = false;
+      abortController.abort();
+    };
+  }, [allOrdersRequest, params?.uuid, refreshKey]);
 
   const detailListing = selectedListing;
   const priceHistory = useMemo(
@@ -291,9 +282,9 @@ export function MarketDetail() {
     () =>
       storedAllOrderPoints.length > 0
         ? storedAllOrderPoints
-        : allOrdersState === 'loading'
-          ? []
-          : liveCompletedOrders,
+        : allOrdersState === 'ready' || allOrdersState === 'error'
+          ? liveCompletedOrders
+          : [],
     [allOrdersState, liveCompletedOrders, storedAllOrderPoints]
   );
   const orderBuckets = useMemo(
@@ -378,7 +369,11 @@ export function MarketDetail() {
   const completedOrdersSource =
     storedRecentOrderPoints.length > 0 ? 'Local database' : 'Live API sample';
   const allCompletedOrdersSource =
-    storedAllOrderPoints.length > 0 ? 'Local database' : 'Live API sample';
+    storedAllOrderPoints.length > 0
+      ? 'Local database'
+      : allOrdersState === 'idle'
+        ? 'Not loaded'
+        : 'Live API sample';
   const cardImage =
     detailListing?.item?.baked_img_lg ??
     detailListing?.item?.baked_img ??
@@ -422,6 +417,16 @@ export function MarketDetail() {
       setCompletedOrderPage={setCompletedOrderPage}
       setCompletedOrderRowsPerPage={setCompletedOrderRowsPerPage}
       usesQuickSellFallback={usesQuickSellFallback}
+      onLoadAllOrders={() => {
+        const uuid = params?.uuid;
+        if (!uuid || allOrdersState === 'loading') return;
+
+        setAllOrdersRequest((current) => ({
+          requestId: (current?.requestId ?? 0) + 1,
+          refreshKey,
+          uuid,
+        }));
+      }}
       onToggleSelectedStarred={() => {
         if (selectedUuid) toggleStarred(selectedUuid);
       }}

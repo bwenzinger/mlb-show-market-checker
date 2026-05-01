@@ -16,6 +16,7 @@ import {
   type OrderPoint,
 } from '../../../marketUtils';
 import { SectionHeading } from '../common';
+import { AllCompletedOrdersLoadPrompt } from './AllCompletedOrdersLoadPrompt';
 import { OrderHistoryLoadingState } from './OrderHistoryLoadingState';
 
 export function AllCompletedOrdersTableSection({
@@ -28,6 +29,7 @@ export function AllCompletedOrdersTableSection({
   safeCompletedOrderPage,
   setCompletedOrderPage,
   setCompletedOrderRowsPerPage,
+  onLoadAllOrders,
 }: {
   allCompletedOrdersDescending: OrderPoint[];
   allOrdersMeta: string;
@@ -38,11 +40,17 @@ export function AllCompletedOrdersTableSection({
   safeCompletedOrderPage: number;
   setCompletedOrderPage: (value: number) => void;
   setCompletedOrderRowsPerPage: (value: number) => void;
+  onLoadAllOrders: () => void;
 }) {
   return (
     <Paper variant="outlined" sx={{ p: 1.75 }}>
       <SectionHeading title="All completed orders" meta={allOrdersMeta} />
-      {allOrdersState === 'loading' ? (
+      {allOrdersState === 'idle' ? (
+        <AllCompletedOrdersLoadPrompt
+          onLoad={onLoadAllOrders}
+          variant="table"
+        />
+      ) : allOrdersState === 'loading' ? (
         <OrderHistoryLoadingState
           message="Loading long-term completed order history..."
           variant="table"

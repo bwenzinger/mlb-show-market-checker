@@ -215,7 +215,7 @@ Market detail workflow
   - fetch cached all-time average via `/api/cards/:uuid/average`
   - fetch cached liquidity via `/api/cards/:uuid/liquidity` for the detail `Profit/hr` card
   - fetch recent stored completed orders using `RECENT_ORDER_LOOKBACK_DAYS` (7 days)
-  - after a short delay, fetch long-term stored completed orders using `ALL_ORDER_LOOKBACK_DAYS` (3650 days)
+  - do not auto-fetch long-term stored completed orders on card selection; the all completed orders table/chart are lazy-loaded only when the user clicks `Load full history`
 - Recent/all-order fetches fall back to the live API sample if local history is unavailable or empty.
 - Summary cards currently show:
   - Buy now
@@ -228,7 +228,7 @@ Market detail workflow
 - `All time average` must come from the cached average API/table, not from recomputing all orders in the frontend.
 - The all-time average card also shows a signed `current +/-N` badge representing current buy-now vs cached all-time average.
 - `7-day trend` is derived from price history over the latest 7-day window.
-- Detail view also shows daily price history, completed orders by hour, all completed orders table, and all completed orders chart.
+- Detail view also shows daily price history, completed orders by hour, and lazy full-history sections for the all completed orders table and all completed orders chart.
 
 Cached average source of truth
 - The source of truth for player/card average price is the backend SQLite table `market_card_averages`.

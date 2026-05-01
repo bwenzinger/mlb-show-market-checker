@@ -62,6 +62,7 @@ interface MarketDetailViewProps {
   setCompletedOrderPage: (value: number) => void;
   setCompletedOrderRowsPerPage: (value: number) => void;
   usesQuickSellFallback: boolean;
+  onLoadAllOrders: () => void;
   onToggleSelectedStarred: () => void;
   onRefresh: () => void;
   refreshDisabled: boolean;
@@ -101,6 +102,7 @@ export function MarketDetailView({
   setCompletedOrderPage,
   setCompletedOrderRowsPerPage,
   usesQuickSellFallback,
+  onLoadAllOrders,
   onToggleSelectedStarred,
   onRefresh,
   refreshDisabled,
@@ -111,7 +113,9 @@ export function MarketDetailView({
       ? `${completedOrders.length} orders - refreshing local history`
       : `${completedOrders.length} orders - ${completedOrdersSource}`;
   const allOrdersMeta =
-    allOrdersState === 'loading'
+    allOrdersState === 'idle'
+      ? 'Not loaded'
+      : allOrdersState === 'loading'
       ? 'Loading long-term order history...'
       : `${allCompletedOrders.length} orders - ${allCompletedOrdersSource}: ${earliestAllOrder} to ${latestAllOrder}`;
   const showAllOrdersFallbackNotice =
@@ -309,6 +313,7 @@ export function MarketDetailView({
           safeCompletedOrderPage={safeCompletedOrderPage}
           setCompletedOrderPage={setCompletedOrderPage}
           setCompletedOrderRowsPerPage={setCompletedOrderRowsPerPage}
+          onLoadAllOrders={onLoadAllOrders}
         />
 
         <AllCompletedOrdersChartSection
@@ -320,6 +325,7 @@ export function MarketDetailView({
               : allOrdersError
           }
           orders={allCompletedOrders}
+          onLoadAllOrders={onLoadAllOrders}
         />
       </Stack>
     </Paper>
