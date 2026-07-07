@@ -24,6 +24,12 @@ Stack and commands
   - `npm run build`: TypeScript check plus Vite production build.
 - Build warning: Vite currently warns that the main JS bundle is larger than 500 kB after minification. This is known.
 
+Deployment behavior
+- GitHub Actions uses `.github/workflows/deploy-home-server.yml` on a self-hosted Linux runner.
+- The workflow runs `scripts/deploy-from-git.sh` against the existing app clone.
+- `scripts/deploy-from-git.sh` intentionally rebuilds and restarts the service even when the app clone is already at `origin/main`, because pushes can originate from the same clone that systemd runs and the service process still needs a restart.
+- The default systemd service name is `mlb-show-market-checker`.
+
 Critical data safety rule
 - `market.sqlite` is live local market-history data and must absolutely never be deleted, reset, overwritten, migrated destructively, or directly modified by AI agents in any way.
 - AI agents may read code that references `market.sqlite`, but must not run commands or make code changes whose purpose is to alter, clear, compact, recreate, or remove that database file.
