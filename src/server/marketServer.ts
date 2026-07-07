@@ -22,7 +22,6 @@ interface CollectorConfig {
   concurrency: number;
   dbPath: string;
   host: string;
-  intervalMs: number;
   port: number;
   requestDelayMs: number;
   staticDir: string;
@@ -886,15 +885,6 @@ async function main() {
   refreshLiquidityCacheAfterSchemaChange();
   warmLiquidityCacheIfEmpty();
   startHttpServer();
-  void collectOnce({ limit: cliOptions.limit }).catch((error) => {
-    console.error("Initial collection failed:", error);
-  });
-
-  windowlessSetInterval(() => {
-    void collectOnce({ limit: cliOptions.limit }).catch((error) => {
-      console.error("Scheduled collection failed:", error);
-    });
-  }, config.intervalMs);
 }
 
 function startHttpServer() {
@@ -1004,7 +994,8 @@ function startHttpServer() {
 
   app.listen(config.port, config.host, () => {
     console.log(`Market history service listening on http://${config.host}:${config.port}`);
-    console.log(`Polling every ${Math.round(config.intervalMs / 60000)} minute(s)`);
+    console.log("Automatic market collection is disabled.");
+    console.log("Use npm run collect:once or POST /api/collect to collect manually.");
   });
 }
 
@@ -1929,7 +1920,6 @@ function readConfig(): CollectorConfig {
     concurrency: 4,
     dbPath: "market.sqlite",
     host: "0.0.0.0",
-    intervalMs: 60 * 60 * 1000,
     port: 4000,
     requestDelayMs: 150,
     staticDir: path.resolve(process.cwd(), "dist"),
@@ -2020,10 +2010,6 @@ function sleep(ms: number): Promise<void> {
 
 function toSqlParams(value: SqlParams): SqlParams {
   return value;
-}
-
-function windowlessSetInterval(fn: () => void, ms: number) {
-  return setInterval(fn, ms);
 }
 
 main().catch((error) => {
