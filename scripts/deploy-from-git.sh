@@ -50,11 +50,11 @@ git fetch --prune "$remote"
 
 after="$(git rev-parse "${remote}/${branch}")"
 if [[ "$before" == "$after" ]]; then
-  echo "Already deployed ${branch} at ${before}."
-  exit 0
+  echo "Already at ${branch} ${before}; rebuilding and restarting service."
+else
+  git merge --ff-only "${remote}/${branch}"
 fi
 
-git merge --ff-only "${remote}/${branch}"
 npm ci
 npm run build
 
@@ -80,4 +80,8 @@ else
   exit 1
 fi
 
-echo "Deployed ${before} -> ${after} and restarted ${service_name}."
+if [[ "$before" == "$after" ]]; then
+  echo "Rebuilt ${branch} at ${after} and restarted ${service_name}."
+else
+  echo "Deployed ${before} -> ${after} and restarted ${service_name}."
+fi

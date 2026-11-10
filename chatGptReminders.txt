@@ -24,6 +24,12 @@ Stack and commands
   - `npm run build`: TypeScript check plus Vite production build.
 - Build warning: Vite currently warns that the main JS bundle is larger than 500 kB after minification. This is known.
 
+Deployment behavior
+- GitHub Actions uses `.github/workflows/deploy-home-server.yml` on a self-hosted Linux runner.
+- The workflow runs `scripts/deploy-from-git.sh` against the existing app clone.
+- `scripts/deploy-from-git.sh` intentionally rebuilds and restarts the service even when the app clone is already at `origin/main`, because pushes can originate from the same clone that systemd runs and the service process still needs a restart.
+- The default systemd service name is `mlb-show-market-checker`.
+
 Critical data safety rule
 - `market.sqlite` is live local market-history data and must absolutely never be deleted, reset, overwritten, migrated destructively, or directly modified by AI agents in any way.
 - AI agents may read code that references `market.sqlite`, but must not run commands or make code changes whose purpose is to alter, clear, compact, recreate, or remove that database file.
@@ -44,8 +50,14 @@ Top-level architecture
   - `useQueryParams`
 - `src/marketUtils.ts` is the main frontend domain utility file: filter/sort options, normalization, price math, quick-sell fallback, search matching, parsing/formatting, listing fetching, and local list sorting.
 - `src/showApi.ts` is the frontend API client for live MLB The Show API proxy calls and local history endpoints.
-- `src/server/marketServer.ts` is the backend service: static frontend host, API proxy, SQLite persistence, market collector, and cached average endpoints.
+- `src/server/marketServer.ts` is the backend service: static frontend host, API proxy, SQLite persistence, manual market collector, and cached average endpoints.
 - `src/orderStats.ts` contains robust average logic shared by backend average computation.
+
+Backend collection behavior
+- The long-running backend does not automatically collect market data on startup and does not run an interval poller.
+- This is intentional so the project can stay up for viewing without wasting idle network/CPU resources.
+- Manual collection is still available through `npm run collect:once` and `POST /api/collect`.
+- Do not reintroduce background polling, startup collection, or scheduler-based collection unless explicitly requested.
 
 URL state and query params
 - URL params are the source of truth for list controls and selected item state.

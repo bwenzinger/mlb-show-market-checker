@@ -1,20 +1,20 @@
-import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import express, {
   type NextFunction,
   type Request,
   type Response,
-} from "express";
+} from 'express';
 
-import { calculateRobustAverage } from "../orderStats";
+import { calculateRobustAverage } from '../orderStats';
 import type {
   CompletedOrder,
   ItemType,
   Listing,
   ListingsResponse,
-} from "../showApi";
+} from '../showApi';
 
 interface CollectorConfig {
   allowedOrigins: string[];
@@ -104,11 +104,11 @@ interface LiquidityAggregateRow {
 
 type SqlParams = Record<string, string | number | null>;
 const MARKET_ITEM_TYPES: ItemType[] = [
-  "mlb_card",
-  "stadium",
-  "equipment",
-  "sponsorship",
-  "unlockable",
+  'mlb_card',
+  'stadium',
+  'equipment',
+  'sponsorship',
+  'unlockable',
 ];
 const LIQUIDITY_SHORT_WINDOW_HOURS = 24;
 const LIQUIDITY_LONG_WINDOW_HOURS = 7 * 24;
@@ -120,18 +120,18 @@ const LIQUIDITY_SHORT_WINDOW_MIN_MATCHES = 3;
 const LIQUIDITY_FULL_CONFIDENCE_MATCHES = 5;
 const LIQUIDITY_PRICE_BAND_MIN_STUBS = 50;
 const LIQUIDITY_PRICE_BAND_PERCENT = 0.02;
-const APP_SORT_QUERY_PARAM = "app_sort";
+const APP_SORT_QUERY_PARAM = 'app_sort';
 const SHOW_LISTING_API_SORTS = new Set([
-  "best_buy_price",
-  "best_sell_price",
-  "rank",
+  'best_buy_price',
+  'best_sell_price',
+  'rank',
 ]);
 
 const config = readConfig();
 const db = new DatabaseSync(config.dbPath);
 
-db.exec("PRAGMA journal_mode = WAL");
-db.exec("PRAGMA foreign_keys = ON");
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS market_cards (
@@ -219,62 +219,64 @@ const liquiditySchemaChanged = ensureLiquiditySchema();
 function ensureLiquiditySchema(): boolean {
   const existingColumns = new Set(
     (
-      db.prepare("PRAGMA table_info(market_card_liquidity)").all() as Array<{
+      db.prepare('PRAGMA table_info(market_card_liquidity)').all() as Array<{
         name: string;
       }>
-    ).map((column) => column.name),
+    ).map((column) => column.name)
   );
   const columnsToAdd: Array<{ definition: string; name: string }> = [
     {
-      name: "buy_matches_3m",
-      definition: "buy_matches_3m INTEGER NOT NULL DEFAULT 0",
+      name: 'buy_matches_3m',
+      definition: 'buy_matches_3m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "sell_matches_3m",
-      definition: "sell_matches_3m INTEGER NOT NULL DEFAULT 0",
+      name: 'sell_matches_3m',
+      definition: 'sell_matches_3m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "buy_matches_10m",
-      definition: "buy_matches_10m INTEGER NOT NULL DEFAULT 0",
+      name: 'buy_matches_10m',
+      definition: 'buy_matches_10m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "sell_matches_10m",
-      definition: "sell_matches_10m INTEGER NOT NULL DEFAULT 0",
+      name: 'sell_matches_10m',
+      definition: 'sell_matches_10m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "buy_matches_30m",
-      definition: "buy_matches_30m INTEGER NOT NULL DEFAULT 0",
+      name: 'buy_matches_30m',
+      definition: 'buy_matches_30m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "sell_matches_30m",
-      definition: "sell_matches_30m INTEGER NOT NULL DEFAULT 0",
+      name: 'sell_matches_30m',
+      definition: 'sell_matches_30m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "recent_order_count_3m",
-      definition: "recent_order_count_3m INTEGER NOT NULL DEFAULT 0",
+      name: 'recent_order_count_3m',
+      definition: 'recent_order_count_3m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "recent_order_count_10m",
-      definition: "recent_order_count_10m INTEGER NOT NULL DEFAULT 0",
+      name: 'recent_order_count_10m',
+      definition: 'recent_order_count_10m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "recent_order_count_30m",
-      definition: "recent_order_count_30m INTEGER NOT NULL DEFAULT 0",
+      name: 'recent_order_count_30m',
+      definition: 'recent_order_count_30m INTEGER NOT NULL DEFAULT 0',
     },
     {
-      name: "recent_order_count_60m",
-      definition: "recent_order_count_60m INTEGER NOT NULL DEFAULT 0",
+      name: 'recent_order_count_60m',
+      definition: 'recent_order_count_60m INTEGER NOT NULL DEFAULT 0',
     },
-    { name: "last_buy_match_at", definition: "last_buy_match_at TEXT" },
-    { name: "last_sell_match_at", definition: "last_sell_match_at TEXT" },
-    { name: "last_order_at", definition: "last_order_at TEXT" },
+    { name: 'last_buy_match_at', definition: 'last_buy_match_at TEXT' },
+    { name: 'last_sell_match_at', definition: 'last_sell_match_at TEXT' },
+    { name: 'last_order_at', definition: 'last_order_at TEXT' },
   ];
   let changed = false;
 
   for (const column of columnsToAdd) {
     if (existingColumns.has(column.name)) continue;
 
-    db.exec(`ALTER TABLE market_card_liquidity ADD COLUMN ${column.definition}`);
+    db.exec(
+      `ALTER TABLE market_card_liquidity ADD COLUMN ${column.definition}`
+    );
     changed = true;
   }
 
@@ -877,7 +879,7 @@ async function main() {
 
   if (cliOptions.once) {
     const stats = await collectOnce({ limit: cliOptions.limit });
-    console.log("Collection complete:", stats);
+    console.log('Collection complete:', stats);
     return;
   }
 
@@ -897,7 +899,7 @@ function startHttpServer() {
     res.sendStatus(204);
   });
 
-  app.get("/api/health", (_req, res) => {
+  app.get('/api/health', (_req, res) => {
     res.json({
       ok: true,
       collectionInProgress: collectionInFlight !== null,
@@ -906,22 +908,22 @@ function startHttpServer() {
     });
   });
 
-  app.get("/api/show/listings.json", async (req, res) => {
+  app.get('/api/show/listings.json', async (req, res) => {
     await sendShowListingsJson(req, res);
   });
 
-  app.get("/api/show/items.json", async (req, res) => {
-    await sendShowApiJson(req, res, "/items.json");
+  app.get('/api/show/items.json', async (req, res) => {
+    await sendShowApiJson(req, res, '/items.json');
   });
 
-  app.get("/api/show/listing.json", async (req, res) => {
+  app.get('/api/show/listing.json', async (req, res) => {
     await sendShowListingJson(req, res);
   });
 
-  app.get("/api/cards/:uuid/orders", (req, res) => {
+  app.get('/api/cards/:uuid/orders', (req, res) => {
     const days = clampInt(req.query.days, 7, 1, 3650);
     const cutoff = toSqlDateTimeUtc(
-      new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+      new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     );
     const rows = db
       .prepare(
@@ -934,38 +936,39 @@ function startHttpServer() {
           WHERE uuid = ?
             AND order_time >= ?
           ORDER BY order_time ASC, id ASC
-        `,
+        `
       )
       .all(req.params.uuid, cutoff);
 
-    res.json({ source: "local-db", days, orders: rows });
+    res.json({ source: 'local-db', days, orders: rows });
   });
 
-  app.get("/api/cards/liquidity", (_req, res) => {
-    const rows = selectCachedLiquiditiesStmt.all() as unknown as CachedLiquidityRow[];
+  app.get('/api/cards/liquidity', (_req, res) => {
+    const rows =
+      selectCachedLiquiditiesStmt.all() as unknown as CachedLiquidityRow[];
 
-    res.json({ source: "local-db-cache", liquidity: rows });
+    res.json({ source: 'local-db-cache', liquidity: rows });
   });
 
-  app.get("/api/cards/:uuid/liquidity", (req, res) => {
+  app.get('/api/cards/:uuid/liquidity', (req, res) => {
     const row = selectCachedLiquidityStmt.get(req.params.uuid) as
       | CachedLiquidityRow
       | undefined;
 
-    res.json({ source: "local-db-cache", liquidity: row ?? null });
+    res.json({ source: 'local-db-cache', liquidity: row ?? null });
   });
 
-  app.get("/api/cards/averages", (_req, res) => {
+  app.get('/api/cards/averages', (_req, res) => {
     const rows = selectCachedAveragesStmt.all() as Array<{
       averagePrice: number | null;
       orderCount: number;
       uuid: string;
     }>;
 
-    res.json({ source: "local-db-cache", averages: rows });
+    res.json({ source: 'local-db-cache', averages: rows });
   });
 
-  app.get("/api/cards/:uuid/average", (req, res) => {
+  app.get('/api/cards/:uuid/average', (req, res) => {
     const row = selectCachedAverageStmt.get(req.params.uuid) as
       | {
           averagePrice: number | null;
@@ -974,10 +977,10 @@ function startHttpServer() {
         }
       | undefined;
 
-    res.json({ source: "local-db-cache", average: row ?? null });
+    res.json({ source: 'local-db-cache', average: row ?? null });
   });
 
-  app.post("/api/collect", async (req, res) => {
+  app.post('/api/collect', async (req, res) => {
     try {
       const limit = clampOptionalInt(req.query.limit ?? req.body?.limit);
       const stats = await collectOnce({ limit });
@@ -993,17 +996,22 @@ function startHttpServer() {
   serveFrontend(app);
 
   app.listen(config.port, config.host, () => {
-    console.log(`Market history service listening on http://${config.host}:${config.port}`);
-    console.log("Automatic API collection is disabled.");
+    console.log(
+      `Market history service listening on http://${config.host}:${config.port}`
+    );
+    console.log('Automatic market collection is disabled.');
+    console.log(
+      'Use npm run collect:once or POST /api/collect to collect manually.'
+    );
   });
 }
 
 function serveFrontend(app: express.Express) {
-  const indexPath = path.join(config.staticDir, "index.html");
+  const indexPath = path.join(config.staticDir, 'index.html');
 
   if (!fs.existsSync(indexPath)) {
     console.log(
-      `No frontend build found at ${indexPath}; API-only mode is active.`,
+      `No frontend build found at ${indexPath}; API-only mode is active.`
     );
     return;
   }
@@ -1017,19 +1025,19 @@ function serveFrontend(app: express.Express) {
 }
 
 function cors(req: Request, res: Response, next: NextFunction) {
-  const origin = req.get("origin");
+  const origin = req.get('origin');
 
   if (origin && isAllowedOrigin(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-  } else if (config.allowedOrigins.includes("*")) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else if (config.allowedOrigins.includes('*')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
 
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader(
-    "Access-Control-Allow-Headers",
-    req.get("access-control-request-headers") ?? "Content-Type,Accept",
+    'Access-Control-Allow-Headers',
+    req.get('access-control-request-headers') ?? 'Content-Type,Accept'
   );
 
   next();
@@ -1038,10 +1046,13 @@ function cors(req: Request, res: Response, next: NextFunction) {
 async function sendShowApiJson(
   req: Request,
   res: Response,
-  path: "/items.json" | "/listing.json" | "/listings.json",
+  path: '/items.json' | '/listing.json' | '/listings.json'
 ) {
   try {
-    const json = await requestJson<unknown>(path, toShowSearchParams(req.query));
+    const json = await requestJson<unknown>(
+      path,
+      toShowSearchParams(req.query)
+    );
     res.json(json);
   } catch (error) {
     res.status(502).json({
@@ -1056,27 +1067,27 @@ async function sendShowListingsJson(req: Request, res: Response) {
     const sortContext = getListingSortContext(req.query);
     const showSearchParams = toShowSearchParams(req.query);
     if (
-      typeof showSearchParams.sort === "string" &&
+      typeof showSearchParams.sort === 'string' &&
       !isShowListingApiSort(showSearchParams.sort)
     ) {
-      showSearchParams.sort = "rank";
+      showSearchParams.sort = 'rank';
     }
 
     const json = await requestJson<ListingsResponse>(
-      "/listings.json",
-      showSearchParams,
+      '/listings.json',
+      showSearchParams
     );
 
     if (shouldRefreshListingPageLiquidity(sortContext)) {
       try {
         refreshCachedLiquidityForListings(
           json.listings ?? [],
-          new Date().toISOString(),
+          new Date().toISOString()
         );
       } catch (error) {
         console.error(
-          "Failed to refresh listing-page liquidity:",
-          error instanceof Error ? error.message : String(error),
+          'Failed to refresh listing-page liquidity:',
+          error instanceof Error ? error.message : String(error)
         );
       }
     }
@@ -1093,21 +1104,21 @@ async function sendShowListingsJson(req: Request, res: Response) {
 async function sendShowListingJson(req: Request, res: Response) {
   try {
     const detail = await requestJson<Listing>(
-      "/listing.json",
-      toShowSearchParams(req.query),
+      '/listing.json',
+      toShowSearchParams(req.query)
     );
 
     try {
-        const capturedAt = new Date().toISOString();
-        const stats = persistListingDetail(detail, capturedAt);
-        refreshAverageCacheAfterPersist(detail, stats.ordersInserted, capturedAt);
-        refreshLiquidityCacheAfterPersist(detail, capturedAt);
-        res.setHeader("X-Market-Orders-Seen", String(stats.ordersSeen));
-        res.setHeader("X-Market-Orders-Inserted", String(stats.ordersInserted));
-      } catch (error) {
+      const capturedAt = new Date().toISOString();
+      const stats = persistListingDetail(detail, capturedAt);
+      refreshAverageCacheAfterPersist(detail, stats.ordersInserted, capturedAt);
+      refreshLiquidityCacheAfterPersist(detail, capturedAt);
+      res.setHeader('X-Market-Orders-Seen', String(stats.ordersSeen));
+      res.setHeader('X-Market-Orders-Inserted', String(stats.ordersInserted));
+    } catch (error) {
       console.error(
-        "Failed to persist on-demand listing refresh:",
-        error instanceof Error ? error.message : String(error),
+        'Failed to persist on-demand listing refresh:',
+        error instanceof Error ? error.message : String(error)
       );
     }
 
@@ -1121,7 +1132,7 @@ async function sendShowListingJson(req: Request, res: Response) {
 }
 
 function toShowSearchParams(
-  query: Request["query"],
+  query: Request['query']
 ): Record<string, string | number | undefined> {
   const params: Record<string, string | number | undefined> = {};
 
@@ -1129,7 +1140,7 @@ function toShowSearchParams(
     if (key === APP_SORT_QUERY_PARAM) continue;
 
     const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
-    if (typeof value === "string" && value.length > 0) {
+    if (typeof value === 'string' && value.length > 0) {
       params[key] = value;
     }
   }
@@ -1137,21 +1148,21 @@ function toShowSearchParams(
   return params;
 }
 
-function getListingSortContext(query: Request["query"]): string | undefined {
+function getListingSortContext(query: Request['query']): string | undefined {
   return (
     getQueryStringValue(query, APP_SORT_QUERY_PARAM) ??
-    getQueryStringValue(query, "sort")
+    getQueryStringValue(query, 'sort')
   );
 }
 
 function getQueryStringValue(
-  query: Request["query"],
-  key: string,
+  query: Request['query'],
+  key: string
 ): string | undefined {
   const rawValue = query[key];
   const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
 
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function isShowListingApiSort(value: string): boolean {
@@ -1159,17 +1170,19 @@ function isShowListingApiSort(value: string): boolean {
 }
 
 function shouldRefreshListingPageLiquidity(sort: string | undefined): boolean {
-  return sort === "profit_per_hour";
+  return sort === 'profit_per_hour';
 }
 
 function isAllowedOrigin(origin: string): boolean {
   return (
-    config.allowedOrigins.includes("*") ||
+    config.allowedOrigins.includes('*') ||
     config.allowedOrigins.includes(origin)
   );
 }
 
-async function collectOnce(options: CollectionOptions): Promise<CollectionStats> {
+async function collectOnce(
+  options: CollectionOptions
+): Promise<CollectionStats> {
   if (collectionInFlight) {
     return collectionInFlight;
   }
@@ -1181,7 +1194,9 @@ async function collectOnce(options: CollectionOptions): Promise<CollectionStats>
   return collectionInFlight;
 }
 
-async function runCollection({ limit }: CollectionOptions): Promise<CollectionStats> {
+async function runCollection({
+  limit,
+}: CollectionOptions): Promise<CollectionStats> {
   const startedAt = new Date().toISOString();
   const run = insertRunStmt.run(startedAt);
   const runId = Number(run.lastInsertRowid);
@@ -1191,13 +1206,14 @@ async function runCollection({ limit }: CollectionOptions): Promise<CollectionSt
     ordersSeen: 0,
     ordersInserted: 0,
     startedAt,
-    finishedAt: "",
+    finishedAt: '',
   };
 
   try {
-    console.log("Collecting market listings...");
+    console.log('Collecting market listings...');
     const listings = await fetchAllMarketListings(limit);
-    const selectedListings = limit === null ? listings : listings.slice(0, limit);
+    const selectedListings =
+      limit === null ? listings : listings.slice(0, limit);
     stats.cardsSeen = selectedListings.length;
 
     withTransaction(() => {
@@ -1206,49 +1222,57 @@ async function runCollection({ limit }: CollectionOptions): Promise<CollectionSt
       }
     });
 
-    console.log(`Fetching completed orders for ${selectedListings.length} listing(s)...`);
+    console.log(
+      `Fetching completed orders for ${selectedListings.length} listing(s)...`
+    );
 
-    await mapConcurrent(selectedListings, config.concurrency, async (listing) => {
-      const uuid = listing.item?.uuid;
-      if (!uuid) return;
+    await mapConcurrent(
+      selectedListings,
+      config.concurrency,
+      async (listing) => {
+        const uuid = listing.item?.uuid;
+        if (!uuid) return;
 
-      try {
-        const detail = await fetchListingByUuid(uuid);
-        stats.listingRequests += 1;
+        try {
+          const detail = await fetchListingByUuid(uuid);
+          stats.listingRequests += 1;
 
-        const capturedAt = new Date().toISOString();
-        const listingStats = persistListingDetail(detail, capturedAt);
-        refreshAverageCacheAfterPersist(
-          detail,
-          listingStats.ordersInserted,
-          capturedAt,
-        );
-        refreshLiquidityCacheAfterPersist(detail, capturedAt);
-        stats.ordersSeen += listingStats.ordersSeen;
-        stats.ordersInserted += listingStats.ordersInserted;
-      } catch (error) {
-        console.error(
-          `Failed to collect listing ${uuid}:`,
-          error instanceof Error ? error.message : String(error),
-        );
+          const capturedAt = new Date().toISOString();
+          const listingStats = persistListingDetail(detail, capturedAt);
+          refreshAverageCacheAfterPersist(
+            detail,
+            listingStats.ordersInserted,
+            capturedAt
+          );
+          refreshLiquidityCacheAfterPersist(detail, capturedAt);
+          stats.ordersSeen += listingStats.ordersSeen;
+          stats.ordersInserted += listingStats.ordersInserted;
+        } catch (error) {
+          console.error(
+            `Failed to collect listing ${uuid}:`,
+            error instanceof Error ? error.message : String(error)
+          );
+        }
       }
-    });
+    );
 
     stats.finishedAt = new Date().toISOString();
-    finishRun(runId, "success", stats, null);
+    finishRun(runId, 'success', stats, null);
     console.log(
-      `Collection finished: ${stats.ordersInserted} new order(s), ${stats.ordersSeen} seen`,
+      `Collection finished: ${stats.ordersInserted} new order(s), ${stats.ordersSeen} seen`
     );
     return stats;
   } catch (error) {
     stats.finishedAt = new Date().toISOString();
     const message = error instanceof Error ? error.message : String(error);
-    finishRun(runId, "error", stats, message);
+    finishRun(runId, 'error', stats, message);
     throw error;
   }
 }
 
-async function fetchAllMarketListings(limit: number | null): Promise<Listing[]> {
+async function fetchAllMarketListings(
+  limit: number | null
+): Promise<Listing[]> {
   if (limit !== null) {
     const listings: Listing[] = [];
 
@@ -1266,7 +1290,7 @@ async function fetchAllMarketListings(limit: number | null): Promise<Listing[]> 
   const listingsByType = await mapConcurrentResults(
     MARKET_ITEM_TYPES,
     MARKET_ITEM_TYPES.length,
-    async (type) => fetchAllMarketListingsForType(type, null),
+    async (type) => fetchAllMarketListingsForType(type, null)
   );
 
   return listingsByType.flat();
@@ -1274,18 +1298,18 @@ async function fetchAllMarketListings(limit: number | null): Promise<Listing[]> 
 
 async function fetchAllMarketListingsForType(
   type: ItemType,
-  limit: number | null,
+  limit: number | null
 ): Promise<Listing[]> {
   const listings: Listing[] = [];
   let page = 1;
   let totalPages = 1;
 
   do {
-    const response = await requestJson<ListingsResponse>("/listings.json", {
+    const response = await requestJson<ListingsResponse>('/listings.json', {
       type,
       page,
-      sort: "rank",
-      order: "desc",
+      sort: 'rank',
+      order: 'desc',
     });
 
     listings.push(...(response.listings ?? []));
@@ -1301,12 +1325,12 @@ async function fetchAllMarketListingsForType(
 }
 
 async function fetchListingByUuid(uuid: string): Promise<Listing> {
-  return requestJson<Listing>("/listing.json", { uuid });
+  return requestJson<Listing>('/listing.json', { uuid });
 }
 
 function persistListingDetail(
   listing: Listing,
-  capturedAt: string,
+  capturedAt: string
 ): { ordersInserted: number; ordersSeen: number } {
   const uuid = listing.item?.uuid;
   if (!uuid) return { ordersInserted: 0, ordersSeen: 0 };
@@ -1314,7 +1338,7 @@ function persistListingDetail(
   upsertMarketCard(listing, capturedAt);
   const normalizedOrders = normalizeCompletedOrders(
     uuid,
-    listing.completed_orders ?? [],
+    listing.completed_orders ?? []
   );
   let ordersInserted = 0;
 
@@ -1333,7 +1357,7 @@ function persistListingDetail(
 function refreshAverageCacheAfterPersist(
   listing: Listing,
   ordersInserted: number,
-  computedAt: string,
+  computedAt: string
 ) {
   const uuid = listing.item?.uuid;
   if (!uuid) return;
@@ -1345,7 +1369,7 @@ function refreshAverageCacheAfterPersist(
 
 function refreshLiquidityCacheAfterPersist(
   listing: Listing,
-  computedAt: string,
+  computedAt: string
 ) {
   const uuid = listing.item?.uuid;
   if (!uuid) return;
@@ -1355,7 +1379,7 @@ function refreshLiquidityCacheAfterPersist(
 
 function refreshCachedLiquidityForListings(
   listings: Listing[],
-  computedAt: string,
+  computedAt: string
 ) {
   if (listings.length === 0) return;
 
@@ -1372,57 +1396,57 @@ function refreshCachedLiquidityForListings(
 
 function warmAverageCacheIfEmpty() {
   if (
-    countTable("market_card_averages") > 0 ||
-    countTable("stored_completed_orders") === 0
+    countTable('market_card_averages') > 0 ||
+    countTable('stored_completed_orders') === 0
   ) {
     return;
   }
 
   const startedAt = Date.now();
-  console.log("Building cached order averages...");
+  console.log('Building cached order averages...');
   const refreshedCount = rebuildAverageCache(new Date().toISOString());
   console.log(
     `Cached ${refreshedCount} order average(s) in ${Math.round(
-      (Date.now() - startedAt) / 1000,
-    )} second(s).`,
+      (Date.now() - startedAt) / 1000
+    )} second(s).`
   );
 }
 
 function warmLiquidityCacheIfEmpty() {
   if (
-    countTable("market_card_liquidity") > 0 ||
-    countTable("market_cards") === 0 ||
-    countTable("stored_completed_orders") === 0
+    countTable('market_card_liquidity') > 0 ||
+    countTable('market_cards') === 0 ||
+    countTable('stored_completed_orders') === 0
   ) {
     return;
   }
 
   const startedAt = Date.now();
-  console.log("Building cached liquidity stats...");
+  console.log('Building cached liquidity stats...');
   const refreshedCount = rebuildLiquidityCache(new Date().toISOString());
   console.log(
     `Cached ${refreshedCount} liquidity row(s) in ${Math.round(
-      (Date.now() - startedAt) / 1000,
-    )} second(s).`,
+      (Date.now() - startedAt) / 1000
+    )} second(s).`
   );
 }
 
 function refreshLiquidityCacheAfterSchemaChange() {
   if (
     !liquiditySchemaChanged ||
-    countTable("market_cards") === 0 ||
-    countTable("stored_completed_orders") === 0
+    countTable('market_cards') === 0 ||
+    countTable('stored_completed_orders') === 0
   ) {
     return;
   }
 
   const startedAt = Date.now();
-  console.log("Refreshing cached liquidity stats for active recency fields...");
+  console.log('Refreshing cached liquidity stats for active recency fields...');
   const refreshedCount = refreshLiquidityCache(new Date().toISOString());
   console.log(
     `Refreshed ${refreshedCount} liquidity row(s) in ${Math.round(
-      (Date.now() - startedAt) / 1000,
-    )} second(s).`,
+      (Date.now() - startedAt) / 1000
+    )} second(s).`
   );
 }
 
@@ -1498,34 +1522,37 @@ function refreshLiquidityCache(computedAt: string): number {
 
 function selectLiquidityAggregateRows(): LiquidityAggregateRow[] {
   return selectLiquidityAggregatesStmt.all(
-    toSqlParams(getLiquidityCutoffParams(Date.now())),
+    toSqlParams(getLiquidityCutoffParams(Date.now()))
   ) as unknown as LiquidityAggregateRow[];
 }
 
 function getLiquidityCutoffParams(now: number): SqlParams {
   return {
     cutoff_3m: toSqlDateTimeUtc(
-      new Date(now - LIQUIDITY_ACTIVE_WINDOW_MINUTES * 60 * 1000),
+      new Date(now - LIQUIDITY_ACTIVE_WINDOW_MINUTES * 60 * 1000)
     ),
     cutoff_10m: toSqlDateTimeUtc(
-      new Date(now - LIQUIDITY_WARM_WINDOW_MINUTES * 60 * 1000),
+      new Date(now - LIQUIDITY_WARM_WINDOW_MINUTES * 60 * 1000)
     ),
     cutoff_30m: toSqlDateTimeUtc(
-      new Date(now - LIQUIDITY_RECENT_WINDOW_MINUTES * 60 * 1000),
+      new Date(now - LIQUIDITY_RECENT_WINDOW_MINUTES * 60 * 1000)
     ),
     cutoff_60m: toSqlDateTimeUtc(
-      new Date(now - LIQUIDITY_STALE_WINDOW_MINUTES * 60 * 1000),
+      new Date(now - LIQUIDITY_STALE_WINDOW_MINUTES * 60 * 1000)
     ),
     cutoff_24: toSqlDateTimeUtc(
-      new Date(now - LIQUIDITY_SHORT_WINDOW_HOURS * 60 * 60 * 1000),
+      new Date(now - LIQUIDITY_SHORT_WINDOW_HOURS * 60 * 60 * 1000)
     ),
     cutoff_7d: toSqlDateTimeUtc(
-      new Date(now - LIQUIDITY_LONG_WINDOW_HOURS * 60 * 60 * 1000),
+      new Date(now - LIQUIDITY_LONG_WINDOW_HOURS * 60 * 60 * 1000)
     ),
   };
 }
 
-function refreshCachedLiquidityForListing(listing: Listing, computedAt: string) {
+function refreshCachedLiquidityForListing(
+  listing: Listing,
+  computedAt: string
+) {
   const uuid = listing.item?.uuid;
   if (!uuid) return;
 
@@ -1540,7 +1567,7 @@ function refreshCachedLiquidityForListing(listing: Listing, computedAt: string) 
       best_sell_price: bestSellPrice,
       buy_band_width: getLiquidityBandWidth(bestBuyPrice),
       sell_band_width: getLiquidityBandWidth(bestSellPrice),
-    }),
+    })
   ) as LiquidityAggregateRow | undefined;
 
   upsertCachedLiquidity(
@@ -1567,15 +1594,15 @@ function refreshCachedLiquidityForListing(listing: Listing, computedAt: string) 
         sellMatches7d: 0,
         uuid,
       },
-      computedAt,
-    ),
+      computedAt
+    )
   );
 }
 
 function upsertCachedAverage(
   uuid: string,
   prices: number[],
-  computedAt: string,
+  computedAt: string
 ) {
   upsertCachedAverageStmt.run(
     toSqlParams({
@@ -1583,7 +1610,7 @@ function upsertCachedAverage(
       average_price: calculateRobustAverage(prices),
       order_count: prices.length,
       computed_at: computedAt,
-    }),
+    })
   );
 }
 
@@ -1616,13 +1643,13 @@ function upsertCachedLiquidity(row: CachedLiquidityRow) {
       sell_fill_rate_per_hour: row.sellFillRatePerHour,
       confidence: row.confidence,
       computed_at: row.computedAt,
-    }),
+    })
   );
 }
 
 function buildCachedLiquidityRow(
   row: LiquidityAggregateRow,
-  computedAt: string,
+  computedAt: string
 ): CachedLiquidityRow {
   const buyMatches3m = positiveInt(row.buyMatches3m);
   const sellMatches3m = positiveInt(row.sellMatches3m);
@@ -1672,8 +1699,7 @@ function buildCachedLiquidityRow(
     lastBuyMatchAt: stringOrNull(row.lastBuyMatchAt),
     lastOrderAt: stringOrNull(row.lastOrderAt),
     lastSellMatchAt: stringOrNull(row.lastSellMatchAt),
-    buyFillRatePerHour:
-      buyMatchCount > 0 ? buyMatchCount / windowHours : null,
+    buyFillRatePerHour: buyMatchCount > 0 ? buyMatchCount / windowHours : null,
     sellFillRatePerHour:
       sellMatchCount > 0 ? sellMatchCount / windowHours : null,
     confidence:
@@ -1691,7 +1717,7 @@ function getLiquidityBandWidth(price: number | null): number {
 
   return Math.max(
     LIQUIDITY_PRICE_BAND_MIN_STUBS,
-    Math.round(price * LIQUIDITY_PRICE_BAND_PERCENT),
+    Math.round(price * LIQUIDITY_PRICE_BAND_PERCENT)
   );
 }
 
@@ -1719,13 +1745,13 @@ function upsertMarketCard(listing: Listing, updatedAt: string) {
       best_buy_price: toInt(listing.best_buy_price),
       raw_json: JSON.stringify(listing),
       updated_at: updatedAt,
-    }),
+    })
   );
 }
 
 function normalizeCompletedOrders(
   uuid: string,
-  orders: CompletedOrder[],
+  orders: CompletedOrder[]
 ): NormalizedOrder[] {
   const seen = new Map<string, number>();
   const normalized: NormalizedOrder[] = [];
@@ -1741,9 +1767,9 @@ function normalizeCompletedOrders(
     seen.set(duplicateKey, duplicateOrdinal);
 
     const sourceHash = crypto
-      .createHash("sha256")
+      .createHash('sha256')
       .update(JSON.stringify({ uuid, orderTime, price, duplicateOrdinal }))
-      .digest("hex");
+      .digest('hex');
 
     normalized.push({
       orderTime,
@@ -1761,7 +1787,7 @@ function normalizeCompletedOrders(
 function insertStoredOrder(
   uuid: string,
   order: NormalizedOrder,
-  capturedAt: string,
+  capturedAt: string
 ): number {
   const result = insertOrderStmt.run(
     toSqlParams({
@@ -1773,7 +1799,7 @@ function insertStoredOrder(
       source_hash: order.sourceHash,
       captured_at: capturedAt,
       raw_json: order.rawJson,
-    }),
+    })
   );
 
   return Number(result.changes);
@@ -1781,20 +1807,20 @@ function insertStoredOrder(
 
 async function requestJson<T>(
   path: string,
-  searchParams: Record<string, string | number | undefined> = {},
+  searchParams: Record<string, string | number | undefined> = {}
 ): Promise<T> {
   const url = new URL(`${trimTrailingSlash(config.apiBaseUrl)}${path}`);
 
   for (const [key, value] of Object.entries(searchParams)) {
-    if (value !== undefined && value !== "") {
+    if (value !== undefined && value !== '') {
       url.searchParams.set(key, String(value));
     }
   }
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/json",
-      "User-Agent": "mlb-show-market-checker/1.0",
+      Accept: 'application/json',
+      'User-Agent': 'mlb-show-market-checker/1.0',
     },
   });
 
@@ -1810,7 +1836,7 @@ async function requestJson<T>(
 async function mapConcurrent<T>(
   items: T[],
   concurrency: number,
-  worker: (item: T) => Promise<void>,
+  worker: (item: T) => Promise<void>
 ): Promise<void> {
   let nextIndex = 0;
 
@@ -1823,14 +1849,14 @@ async function mapConcurrent<T>(
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, runWorker),
+    Array.from({ length: Math.min(concurrency, items.length) }, runWorker)
   );
 }
 
 async function mapConcurrentResults<T, R>(
   items: T[],
   concurrency: number,
-  worker: (item: T) => Promise<R>,
+  worker: (item: T) => Promise<R>
 ): Promise<R[]> {
   const results: R[] = [];
   let nextIndex = 0;
@@ -1844,29 +1870,29 @@ async function mapConcurrentResults<T, R>(
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, runWorker),
+    Array.from({ length: Math.min(concurrency, items.length) }, runWorker)
   );
 
   return results;
 }
 
 function withTransaction<T>(fn: () => T): T {
-  db.exec("BEGIN");
+  db.exec('BEGIN');
   try {
     const result = fn();
-    db.exec("COMMIT");
+    db.exec('COMMIT');
     return result;
   } catch (error) {
-    db.exec("ROLLBACK");
+    db.exec('ROLLBACK');
     throw error;
   }
 }
 
 function finishRun(
   id: number,
-  status: "success" | "error",
+  status: 'success' | 'error',
   stats: CollectionStats,
-  error: string | null,
+  error: string | null
 ) {
   finishRunStmt.run(
     toSqlParams({
@@ -1878,17 +1904,17 @@ function finishRun(
       orders_seen: stats.ordersSeen,
       orders_inserted: stats.ordersInserted,
       error,
-    }),
+    })
   );
 }
 
 function getCounts() {
   return {
-    averages: countTable("market_card_averages"),
-    cards: countTable("market_cards"),
-    liquidity: countTable("market_card_liquidity"),
-    orders: countTable("stored_completed_orders"),
-    runs: countTable("collector_runs"),
+    averages: countTable('market_card_averages'),
+    cards: countTable('market_cards'),
+    liquidity: countTable('market_card_liquidity'),
+    orders: countTable('stored_completed_orders'),
+    runs: countTable('collector_runs'),
   };
 }
 
@@ -1900,7 +1926,7 @@ function getLastRun() {
         FROM collector_runs
         ORDER BY id DESC
         LIMIT 1
-      `,
+      `
     )
     .get();
 }
@@ -1914,14 +1940,14 @@ function countTable(tableName: string): number {
 
 function readConfig(): CollectorConfig {
   return {
-    allowedOrigins: ["*"],
-    apiBaseUrl: "https://mlb26.theshow.com/apis",
+    allowedOrigins: ['*'],
+    apiBaseUrl: 'https://mlb26.theshow.com/apis',
     concurrency: 4,
-    dbPath: "market.sqlite",
-    host: "0.0.0.0",
+    dbPath: 'market.sqlite',
+    host: '0.0.0.0',
     port: 4000,
     requestDelayMs: 150,
-    staticDir: path.resolve(process.cwd(), "dist"),
+    staticDir: path.resolve(process.cwd(), 'dist'),
   };
 }
 
@@ -1930,7 +1956,7 @@ function parseCliOptions() {
   let limit: number | null = null;
 
   for (let index = 0; index < args.length; index += 1) {
-    if (args[index] === "--limit") {
+    if (args[index] === '--limit') {
       limit = clampOptionalInt(args[index + 1]);
       index += 1;
     }
@@ -1938,12 +1964,12 @@ function parseCliOptions() {
 
   return {
     limit,
-    once: args.includes("--once"),
+    once: args.includes('--once'),
   };
 }
 
 function clampOptionalInt(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
+  if (value === null || value === undefined || value === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(Math.trunc(parsed), 0) : null;
 }
@@ -1952,7 +1978,7 @@ function clampInt(
   value: unknown,
   fallback: number,
   min: number,
-  max: number,
+  max: number
 ): number {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw);
@@ -1964,43 +1990,44 @@ function normalizeOrderTime(value: string | null): string | null {
   if (!value) return null;
 
   const match = value.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/,
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/
   );
   if (!match) return null;
 
   return `${match[3]}-${pad2(Number(match[1]))}-${pad2(Number(match[2]))} ${pad2(
-    Number(match[4]),
+    Number(match[4])
   )}:${match[5]}:${match[6]}`;
 }
 
 function toSqlDateTimeUtc(value: Date): string {
   return `${value.getUTCFullYear()}-${pad2(value.getUTCMonth() + 1)}-${pad2(
-    value.getUTCDate(),
+    value.getUTCDate()
   )} ${pad2(value.getUTCHours())}:${pad2(value.getUTCMinutes())}:${pad2(
-    value.getUTCSeconds(),
+    value.getUTCSeconds()
   )}`;
 }
 
 function toInt(value: unknown): number | null {
-  if (value === null || value === undefined || value === "" || value === "-") {
+  if (value === null || value === undefined || value === '' || value === '-') {
     return null;
   }
 
-  const normalized = typeof value === "string" ? value.replace(/,/g, "") : value;
+  const normalized =
+    typeof value === 'string' ? value.replace(/,/g, '') : value;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
 }
 
 function stringOrNull(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function trimTrailingSlash(value: string): string {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
+  return value.endsWith('/') ? value.slice(0, -1) : value;
 }
 
 function pad2(value: number): string {
-  return String(value).padStart(2, "0");
+  return String(value).padStart(2, '0');
 }
 
 function sleep(ms: number): Promise<void> {
