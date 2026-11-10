@@ -301,7 +301,7 @@ Backend behavior
 - CORS is fixed to `*` for this single deployment setup.
 - The collector fetches all market listings across all item types, persists cards, fetches each listing detail, stores completed orders, and updates cached averages.
 - `collectionInFlight` prevents overlapping collection work.
-- The site is retired: do not reintroduce automatic API polling. Collection is manual only (`npm run collect:once` or `POST /api/collect`); browser-driven proxy requests remain on demand.
+- Keep the site available as a portfolio demo, with automatic history collection disabled. Do not reintroduce startup collection or scheduled API polling. Full-market collection is manual only (`npm run collect:once` or `POST /api/collect`); browser-driven proxy requests and their existing on-demand order persistence remain available. Stored history remains accessible, though activity metrics can become stale without fresh collection.
 
 Data and API notes
 - MLB item types used by the app: `mlb_card`, `stadium`, `equipment`, `sponsorship`, `unlockable`.
@@ -316,7 +316,7 @@ Data and API notes
 Deployment and server lifecycle
 - Linux SSH address: `bwenzinger@ubuntu-new`.
 - The intended always-on Linux setup is a systemd service installed by `scripts/install-systemd-service.sh`.
-- Retirement: stop and disable `mlb-show-market-checker.service` on the Linux host, and disable the `Deploy Home Server` workflow in GitHub Actions so deployment does not restart it. See README for commands. Local code changes alone do not stop an already-running Linux process.
+- Keep `mlb-show-market-checker.service` running and enabled on the Linux host, and keep the `Deploy Home Server` workflow enabled. The service hosts the website and API as well as manual collection; stopping it takes the portfolio demo offline. Deploying or restarting the current code does not resume automatic history collection. If the service was previously disabled, restore boot startup with `sudo systemctl enable --now mlb-show-market-checker.service` after deploying the version without automatic collection. See README for verification commands.
 - This Windows development machine must not run the long-running backend service. The always-on service role is reserved for the Linux server only.
 - On Windows, use local dev commands only when needed for short-lived verification work. Do not leave the backend/dev server running as a persistent service on this computer.
 - Service name defaults to `mlb-show-market-checker`.

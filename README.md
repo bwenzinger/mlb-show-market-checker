@@ -33,17 +33,24 @@ The Node process will:
 
 Collection only runs when explicitly requested with `npm run collect:once` or `POST /api/collect`. Browsing the site can still make on-demand API requests.
 
-## Stop the retired site
+For a real public site, put this behind a reverse proxy such as Caddy or Nginx and point your domain to the Linux machine. The app can also be exposed directly on port `4000` if your firewall and router allow it.
 
-On the Linux host, stop the service and disable startup:
+## Keep the portfolio site online without automatic history collection
+
+Keep `mlb-show-market-checker.service` running and the `Deploy Home Server` GitHub Actions workflow enabled. The same backend serves both the website and its API; stopping it takes the site offline.
+
+Normal server startup does not collect history or schedule background API polling. Visitors can still browse live listings and stored history, and opening an item can fetch its current detail and save the returned completed orders. Existing history remains available, but it no longer grows through scheduled collection. Market activity metrics can become stale without new collection.
+
+If the service was previously stopped or disabled, first deploy the version with automatic collection removed, then restore the service and startup on boot on the Linux host:
 
 ```bash
-sudo systemctl disable --now mlb-show-market-checker.service
+sudo systemctl enable --now mlb-show-market-checker.service
+systemctl is-active mlb-show-market-checker.service
+systemctl is-enabled mlb-show-market-checker.service
+curl --fail http://127.0.0.1:4000/api/health
 ```
 
-Verify with `systemctl is-active mlb-show-market-checker.service` and `systemctl is-enabled mlb-show-market-checker.service`; the expected states are `inactive` and `disabled`. Disable the `Deploy Home Server` workflow in GitHub Actions as well, since it explicitly restarts the service after a deployment. Keep `market.sqlite` and its accompanying files intact.
-
-For a real public site, put this behind a reverse proxy such as Caddy or Nginx and point your domain to the Linux machine. The app can also be exposed directly on port `4000` if your firewall and router allow it.
+The expected service states are `active` and `enabled`. Restarting or redeploying the updated backend does not re-enable automatic collection. Keep `market.sqlite` and its accompanying files intact.
 
 ## Run Permanently On Linux
 
