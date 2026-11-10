@@ -28,8 +28,20 @@ The Node process will:
 - serve the built React app from `dist/`
 - proxy browser requests to the MLB The Show API through `/api/show`
 - expose stored completed orders through `/api/cards/:uuid/orders`
-- run the collector immediately, then once per hour by default
+- leave automatic API collection disabled (no startup collection or polling timer)
 - store market history in `market.sqlite`
+
+Collection only runs when explicitly requested with `npm run collect:once` or `POST /api/collect`. Browsing the site can still make on-demand API requests.
+
+## Stop the retired site
+
+On the Linux host, stop the service and disable startup:
+
+```bash
+sudo systemctl disable --now mlb-show-market-checker.service
+```
+
+Verify with `systemctl is-active mlb-show-market-checker.service` and `systemctl is-enabled mlb-show-market-checker.service`; the expected states are `inactive` and `disabled`. Disable the `Deploy Home Server` workflow in GitHub Actions as well, since it explicitly restarts the service after a deployment. Keep `market.sqlite` and its accompanying files intact.
 
 For a real public site, put this behind a reverse proxy such as Caddy or Nginx and point your domain to the Linux machine. The app can also be exposed directly on port `4000` if your firewall and router allow it.
 

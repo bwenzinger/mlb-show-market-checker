@@ -262,7 +262,7 @@ Backend behavior
   - host: `0.0.0.0`
   - port: `4000`
   - DB path: `market.sqlite`
-  - collector interval: 1 hour
+  - automatic collection: disabled; no startup collection or polling timer
   - collector concurrency: 4
   - request delay: 150ms
   - static dir: `dist`
@@ -289,6 +289,7 @@ Backend behavior
 - CORS is fixed to `*` for this single deployment setup.
 - The collector fetches all market listings across all item types, persists cards, fetches each listing detail, stores completed orders, and updates cached averages.
 - `collectionInFlight` prevents overlapping collection work.
+- The site is retired: do not reintroduce automatic API polling. Collection is manual only (`npm run collect:once` or `POST /api/collect`); browser-driven proxy requests remain on demand.
 
 Data and API notes
 - MLB item types used by the app: `mlb_card`, `stadium`, `equipment`, `sponsorship`, `unlockable`.
@@ -301,7 +302,9 @@ Data and API notes
 - Local storage is acceptable for user preferences such as starred listing UUIDs. Do not store market price/listing/order payloads there under the current no-frontend-market-cache rule.
 
 Deployment and server lifecycle
+- Linux SSH address: `bwenzinger@ubuntu-new`.
 - The intended always-on Linux setup is a systemd service installed by `scripts/install-systemd-service.sh`.
+- Retirement: stop and disable `mlb-show-market-checker.service` on the Linux host, and disable the `Deploy Home Server` workflow in GitHub Actions so deployment does not restart it. See README for commands. Local code changes alone do not stop an already-running Linux process.
 - This Windows development machine must not run the long-running backend service. The always-on service role is reserved for the Linux server only.
 - On Windows, use local dev commands only when needed for short-lived verification work. Do not leave the backend/dev server running as a persistent service on this computer.
 - Service name defaults to `mlb-show-market-checker`.
